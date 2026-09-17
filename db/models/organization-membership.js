@@ -7,44 +7,28 @@ const OrganizationMembership = sequelize.define(
     id: {
       type: DataTypes.STRING(191),
       primaryKey: true,
+      allowNull: false,
     },
-
     userId: {
       type: DataTypes.STRING(191),
       allowNull: false,
     },
-
     organizationId: {
       type: DataTypes.STRING(191),
       allowNull: false,
     },
-
-    role: {
-      type: DataTypes.ENUM(
-        "OWNER",
-        "ADMIN",
-        "MANAGER",
-        "MEMBER",
-      ),
-      allowNull: false,
-      defaultValue: "MEMBER",
+    roleId: {
+      type: DataTypes.STRING(36),
+      allowNull: true,
     },
   },
   {
     tableName: "organization_memberships",
     timestamps: true,
-
     indexes: [
-      {
-        unique: true,
-        fields: ["userId", "organizationId"],
-      },
-      {
-        fields: ["organizationId"],
-      },
-      {
-        fields: ["userId"],
-      },
+      { unique: true, fields: ["userId", "organizationId"] },
+      { fields: ["organizationId"] },
+      { fields: ["roleId"] },
     ],
   },
 );

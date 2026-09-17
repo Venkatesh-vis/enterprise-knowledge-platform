@@ -1,115 +1,98 @@
-export type Role =
-  | "OWNER"
-  | "ADMIN"
-  | "MANAGER"
-  | "MEMBER";
+export const PERMISSIONS = [
+  "DASHBOARD_VIEW",
+
+  "DOCUMENT_READ",
+  "DOCUMENT_CREATE",
+  "DOCUMENT_UPDATE",
+  "DOCUMENT_DELETE",
+
+  "USER_READ",
+  "USER_INVITE",
+  "USER_UPDATE",
+  "USER_DELETE",
+
+  "INVITATION_READ",
+  "INVITATION_CREATE",
+  "INVITATION_IMPORT",
+  "INVITATION_RESEND",
+  "INVITATION_REVOKE",
+
+  "AI_USE",
+
+  "ANALYTICS_READ",
+
+  "BILLING_READ",
+  "BILLING_MANAGE",
+
+  "SECURITY_READ",
+  "SECURITY_MANAGE",
+
+  "AUDIT_LOG_READ",
+
+  "ORGANIZATION_SETTINGS_READ",
+  "ORGANIZATION_SETTINGS_UPDATE",
+] as const;
 
 export type Permission =
-  | "DASHBOARD_VIEW"
-  | "DOCUMENT_READ"
-  | "DOCUMENT_CREATE"
-  | "DOCUMENT_UPDATE"
-  | "DOCUMENT_DELETE"
-  | "USER_READ"
-  | "USER_INVITE"
-  | "USER_UPDATE"
-  | "USER_DELETE"
-  | "AI_USE"
-  | "ANALYTICS_READ"
-  | "BILLING_READ"
-  | "BILLING_MANAGE"
-  | "SECURITY_READ"
-  | "SECURITY_MANAGE"
-  | "ORGANIZATION_SETTINGS_READ"
-  | "ORGANIZATION_SETTINGS_UPDATE";
+  (typeof PERMISSIONS)[number];
 
-const rolePermissions: Record<Role, readonly Permission[]> = {
-  OWNER: [
-    "DASHBOARD_VIEW",
-    "DOCUMENT_READ",
-    "DOCUMENT_CREATE",
-    "DOCUMENT_UPDATE",
-    "DOCUMENT_DELETE",
-    "USER_READ",
-    "USER_INVITE",
-    "USER_UPDATE",
-    "USER_DELETE",
-    "AI_USE",
-    "ANALYTICS_READ",
-    "BILLING_READ",
-    "BILLING_MANAGE",
-    "SECURITY_READ",
-    "SECURITY_MANAGE",
-    "ORGANIZATION_SETTINGS_READ",
-    "ORGANIZATION_SETTINGS_UPDATE",
-  ],
+export const ROLES = [
+  "OWNER",
+  "ADMIN",
+  "MANAGER",
+  "MEMBER",
+] as const;
 
-  ADMIN: [
-    "DASHBOARD_VIEW",
-    "DOCUMENT_READ",
-    "DOCUMENT_CREATE",
-    "DOCUMENT_UPDATE",
-    "DOCUMENT_DELETE",
-    "USER_READ",
-    "USER_INVITE",
-    "USER_UPDATE",
-    "USER_DELETE",
-    "AI_USE",
-    "ANALYTICS_READ",
-    "BILLING_READ",
-    "SECURITY_READ",
-    "SECURITY_MANAGE",
-    "ORGANIZATION_SETTINGS_READ",
-    "ORGANIZATION_SETTINGS_UPDATE",
-  ],
+export type Role =
+  (typeof ROLES)[number];
 
-  MANAGER: [
-    "DASHBOARD_VIEW",
-    "DOCUMENT_READ",
-    "DOCUMENT_CREATE",
-    "DOCUMENT_UPDATE",
-    "DOCUMENT_DELETE",
-    "USER_READ",
-    "USER_INVITE",
-    "AI_USE",
-    "ANALYTICS_READ",
-    "ORGANIZATION_SETTINGS_READ",
-  ],
-
-  MEMBER: [
-    "DASHBOARD_VIEW",
-    "DOCUMENT_READ",
-    "AI_USE",
-  ],
-};
-
-export function getRolePermissions(
-  role: Role,
-): readonly Permission[] {
-  return rolePermissions[role] ?? [];
+export function isPermission(
+  value: unknown,
+): value is Permission {
+  return (
+    typeof value === "string" &&
+    PERMISSIONS.includes(
+      value as Permission,
+    )
+  );
 }
 
-export function hasPermission(
-  role: Role,
+export function isRole(
+  value: unknown,
+): value is Role {
+  return (
+    typeof value === "string" &&
+    ROLES.includes(
+      value as Role,
+    )
+  );
+}
+
+export function permissionGranted(
+  permissions: readonly Permission[],
   permission: Permission,
 ): boolean {
-  return getRolePermissions(role).includes(permission);
+  return permissions.includes(
+    permission,
+  );
 }
 
 export function hasAnyPermission(
-  role: Role,
   permissions: readonly Permission[],
+  required: readonly Permission[],
 ): boolean {
-  return permissions.some((permission) =>
-    hasPermission(role, permission),
+  return required.some(
+    (permission) =>
+      permissions.includes(permission),
   );
 }
 
 export function hasAllPermissions(
-  role: Role,
   permissions: readonly Permission[],
+  required: readonly Permission[],
 ): boolean {
-  return permissions.every((permission) =>
-    hasPermission(role, permission),
+  return required.every(
+    (permission) =>
+      permissions.includes(permission),
   );
 }

@@ -1,20 +1,28 @@
 import { NextResponse } from "next/server";
-import {getCurrentUser,} from "@/lib/auth/get-current-user";
 
+import {
+  getCurrentAuth,
+} from "@/lib/auth/get-current-user";
+
+export const runtime =
+  "nodejs";
 
 export async function GET() {
-  const currentUser = await getCurrentUser();
+  const auth =
+    await getCurrentAuth();
 
-  if (!currentUser) {
+  if (!auth) {
     return NextResponse.json(
       {
         success: false,
-        message: "Unauthorized.",
+        message:
+          "Not authenticated.",
       },
       {
         status: 401,
         headers: {
-          "Cache-Control": "no-store",
+          "Cache-Control":
+            "no-store",
         },
       },
     );
@@ -23,22 +31,21 @@ export async function GET() {
   return NextResponse.json(
     {
       success: true,
+      message:
+        "Current user.",
       data: {
-        user: {
-          id: currentUser.userId,
-        },
-        organization: {
-          id: currentUser.organizationId,
-        },
-        membership: {
-          id: currentUser.membershipId,
-          role: currentUser.role,
-        },
+        user: auth.user,
+        organization:
+          auth.organization,
+        membership:
+          auth.membership,
       },
     },
     {
+      status: 200,
       headers: {
-        "Cache-Control": "no-store",
+        "Cache-Control":
+          "no-store",
       },
     },
   );

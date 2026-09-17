@@ -2,76 +2,69 @@ import "server-only";
 
 import {SignJWT,jwtVerify,type JWTPayload,} from "jose";
 
-const ISSUER = "enterprise-knowledge-platform";
-const AUDIENCE = "enterprise-knowledge-web";
+const JWT_ISSUER = "enterprise-knowledge-platform";
 
-const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
+const JWT_AUDIENCE = "enterprise-knowledge-web";
 
-export type AuthTokenPayload = JWTPayload & {
-  userId: string;
-  organizationId: string;
-  membershipId: string;
-  role: string;
-};
+const ACCESS_TOKEN_TTL = "15m";
+
+type AuthTokenClaims =
+  JWTPayload & {
+    sub: string;
+  };
 
 function getSecretKey() {
   const secret = process.env.JWT_SECRET;
 
   if (!secret) {
-    throw new Error("JWT_SECRET is not configured.");
+    throw new Error(
+      "JWT_SECRET is not configured.",
+    );
   }
 
-  return new TextEncoder().encode(secret);
+  return new TextEncoder().encode(
+    secret,
+  );
 }
 
-export async function createAccessToken(input: {
-  userId: string;
-  organizationId: string;
-  membershipId: string;
-  role: string;
-}) {
-  const now = Math.floor(Date.now() / 1000);
-
-  return new SignJWT({
-    userId: input.userId,
-    organizationId: input.organizationId,
-    membershipId: input.membershipId,
-    role: input.role,
-  })
+export async function createAccessToken(
+  userId: string,
+) {
+  return new SignJWT({})
     .setProtectedHeader({
       alg: "HS256",
       typ: "JWT",
     })
-    .setSubject(input.userId)
-    .setIssuer(ISSUER)
-    .setAudience(AUDIENCE)
-    .setIssuedAt(now)
-    .setExpirationTime(now + ACCESS_TOKEN_TTL_SECONDS,)
+    .setSubject(userId)
+    .setIssuer(JWT_ISSUER)
+    .setAudience(JWT_AUDIENCE)
+    .setIssuedAt()
+    .setExpirationTime(
+      ACCESS_TOKEN_TTL,
+    )
     .sign(getSecretKey());
 }
 
 export async function verifyAccessToken(
   token: string,
-): Promise<AuthTokenPayload> {
+) {
   const { payload } =
-    await jwtVerify<AuthTokenPayload>(
+    await jwtVerify<AuthTokenClaims>(
       token,
       getSecretKey(),
       {
         algorithms: ["HS256"],
-        issuer: ISSUER,
-        audience: AUDIENCE,
+        issuer: JWT_ISSUER,
+        audience: JWT_AUDIENCE,
       },
     );
 
   if (
-    typeof payload.userId !== "string" ||
-    typeof payload.organizationId !== "string" ||
-    typeof payload.membershipId !== "string" ||
-    typeof payload.role !== "string"
+    typeof payload.sub !==
+    "string"
   ) {
     throw new Error(
-      "Authentication token contains invalid claims.",
+      "Invalid authentication token.",
     );
   }
 

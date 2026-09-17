@@ -4,27 +4,51 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+
+import {
+  isAxiosError,
+} from "axios";
+
+import {
+  useForm,
+} from "react-hook-form";
+
+import {
+  zodResolver,
+} from "@hookform/resolvers/zod";
+
 import { z } from "zod";
 
 import { Button } from "@/app/shared/ui/button";
-import { FieldError } from "@/app/shared/ui/field-error";
+import {
+  FieldError,
+} from "@/app/shared/ui/field-error";
 import { Input } from "@/app/shared/ui/input";
 import { Label } from "@/app/shared/ui/label";
-import { SocialButton } from "@/app/shared/ui/social-button";
-import { apiRequest } from "@/app/shared/lib/api";
+import {
+  SocialButton,
+} from "@/app/shared/ui/social-button";
 
-const loginSchema = z.object({
-  email: z
-    .string()
-    .trim()
-    .email("Enter a valid email address."),
+import {
+  apiRequest,
+} from "@/app/shared/lib/api";
 
-  password: z
-    .string()
-    .min(1, "Password is required."),
-});
+const loginSchema =
+  z.object({
+    email: z
+      .string()
+      .trim()
+      .email(
+        "Enter a valid email address.",
+      ),
+
+    password: z
+      .string()
+      .min(
+        1,
+        "Password is required.",
+      ),
+  });
 
 type LoginFormValues =
   z.infer<typeof loginSchema>;
@@ -32,26 +56,18 @@ type LoginFormValues =
 type LoginResponse = {
   success: boolean;
   message: string;
-  data?: {
-    user: {
-      id: string;
-      name: string;
-    };
-    organization: {
-      id: string;
-      name: string;
-    };
-    membership: {
-      id: string;
-      role: string;
-    };
-  };
 };
 
 export function LoginForm() {
-  const router = useRouter();
+  const router =
+    useRouter();
 
-  const [serverError, setServerError] = useState<string | null>(null);
+  const [
+    serverError,
+    setServerError,
+  ] = useState<
+    string | null
+  >(null);
 
   const {
     register,
@@ -60,16 +76,20 @@ export function LoginForm() {
       errors,
       isSubmitting,
     },
-  } = useForm<LoginFormValues>({
-    resolver: zodResolver(loginSchema),
+  } =
+    useForm<LoginFormValues>({
+      resolver:
+        zodResolver(
+          loginSchema,
+        ),
 
-    defaultValues: {
-      email: "",
-      password: "",
-    },
+      defaultValues: {
+        email: "",
+        password: "",
+      },
 
-    mode: "onBlur",
-  });
+      mode: "onBlur",
+    });
 
   async function onSubmit(
     values: LoginFormValues,
@@ -77,39 +97,45 @@ export function LoginForm() {
     setServerError(null);
 
     try {
-      await apiRequest<LoginResponse>({
-        path: "/api/auth/login",
-        method: "POST",
-        body: values,
-      });
+      const response =
+        await apiRequest<LoginResponse>(
+          {
+            path:
+              "/api/auth/login",
+            method: "POST",
+            body: values,
+          },
+        );
 
-      router.replace("/dashboard");
-      router.refresh();
-    } catch (error: unknown) {
-      if (
-        typeof error === "object" &&
-        error !== null &&
-        "response" in error
-      ) {
-        const axiosError =
-          error as {
-            response?: {
-              data?: {
-                message?: string;
-              };
-            };
-          };
-
+      if (!response.success) {
         setServerError(
-          axiosError.response?.data?.message ??
-            "Unable to sign in. Please check your credentials and try again.",
+          response.message ||
+            "Unable to sign in.",
+        );
+
+        return;
+      }
+
+      router.replace(
+        "/dashboard",
+      );
+
+      router.refresh();
+    } catch (error) {
+      if (
+        isAxiosError(error)
+      ) {
+        setServerError(
+          error.response
+            ?.data?.message ??
+            "Unable to sign in. Please try again.",
         );
 
         return;
       }
 
       setServerError(
-        "Unable to connect to the server. Please check your connection and try again.",
+        "Unable to connect to the server. Please try again.",
       );
     }
   }
@@ -126,7 +152,6 @@ export function LoginForm() {
       className="w-full max-w-md"
     >
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-900/5 sm:p-8">
-        {/* Header */}
         <div className="text-center">
           <div
             aria-hidden="true"
@@ -153,7 +178,6 @@ export function LoginForm() {
           </p>
         </div>
 
-        {/* Server Error */}
         {serverError && (
           <div
             role="alert"
@@ -164,16 +188,18 @@ export function LoginForm() {
           </div>
         )}
 
-        {/* Google */}
         <div className="mt-8">
           <SocialButton
             provider="google"
-            onClick={handleGoogleSignIn}
-            disabled={isSubmitting}
+            onClick={
+              handleGoogleSignIn
+            }
+            disabled={
+              isSubmitting
+            }
           />
         </div>
 
-        {/* Divider */}
         <div
           aria-hidden="true"
           className="my-6 flex items-center gap-4"
@@ -187,13 +213,13 @@ export function LoginForm() {
           <div className="h-px flex-1 bg-slate-200" />
         </div>
 
-        {/* Form */}
         <form
-          onSubmit={handleSubmit(onSubmit)}
+          onSubmit={handleSubmit(
+            onSubmit,
+          )}
           noValidate
           className="space-y-5"
         >
-          {/* Email */}
           <div>
             <Label
               htmlFor="login-email"
@@ -207,9 +233,15 @@ export function LoginForm() {
               type="email"
               autoComplete="email"
               placeholder="you@company.com"
-              disabled={isSubmitting}
-              {...register("email")}
-              error={!!errors.email}
+              disabled={
+                isSubmitting
+              }
+              {...register(
+                "email",
+              )}
+              error={
+                !!errors.email
+              }
               aria-describedby={
                 errors.email
                   ? "login-email-error"
@@ -219,11 +251,13 @@ export function LoginForm() {
 
             <FieldError
               id="login-email-error"
-              message={errors.email?.message}
+              message={
+                errors.email
+                  ?.message
+              }
             />
           </div>
 
-          {/* Password */}
           <div>
             <div className="flex items-center justify-between gap-4">
               <Label
@@ -243,9 +277,15 @@ export function LoginForm() {
               type="password"
               autoComplete="current-password"
               placeholder="Enter your password"
-              disabled={isSubmitting}
-              {...register("password")}
-              error={!!errors.password}
+              disabled={
+                isSubmitting
+              }
+              {...register(
+                "password",
+              )}
+              error={
+                !!errors.password
+              }
               aria-describedby={
                 errors.password
                   ? "login-password-error"
@@ -255,14 +295,18 @@ export function LoginForm() {
 
             <FieldError
               id="login-password-error"
-              message={errors.password?.message}
+              message={
+                errors.password
+                  ?.message
+              }
             />
           </div>
 
-          {/* Submit */}
           <Button
             type="submit"
-            disabled={isSubmitting}
+            disabled={
+              isSubmitting
+            }
             className="w-full cursor-pointer"
           >
             {isSubmitting
@@ -271,7 +315,6 @@ export function LoginForm() {
           </Button>
         </form>
 
-        {/* Footer */}
         <div className="mt-6 border-t border-slate-100 pt-6 text-center">
           <p className="text-sm text-slate-500">
             Don&apos;t have an account?{" "}

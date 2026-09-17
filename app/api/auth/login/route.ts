@@ -1,212 +1,172 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import bcrypt from "bcryptjs";
+import { z } from "zod";
 import User from "@/db/models/user";
 import OrganizationMembership from "@/db/models/organization-membership";
-import { createAccessToken, } from "@/lib/auth/jwt";
-import { setAuthCookie, } from "@/lib/auth/cookie";
+import {createAccessToken,} from "@/lib/auth/jwt";
 
-export const runtime = "nodejs";
+import {
+  setAuthCookie,
+} from "@/lib/auth/cookie";
 
-const loginSchema = z.object({
+export const runtime =
+  "nodejs";
+
+const loginSchema =
+  z.object({
     email: z
-        .string()
-        .trim()
-        .toLowerCase()
-        .email("Enter a valid email address.")
-        .max(255),
+      .string()
+      .trim()
+      .email(),
 
     password: z
-        .string()
-        .min(1)
-        .max(128),
-});
+      .string()
+      .min(1),
+  });
 
-function jsonResponse(
-    body: unknown,
-    status = 200,
+function errorResponse(
+  message: string,
+  status: number,
 ) {
-    return NextResponse.json(
-        body,
-        {
-            status,
-            headers: {
-                "Cache-Control": "no-store",
-                Pragma: "no-cache",
-            },
-        },
-    );
+  return NextResponse.json(
+    {
+      success: false,
+      message,
+    },
+    {
+      status,
+      headers: {
+        "Cache-Control":
+          "no-store",
+      },
+    },
+  );
 }
 
 export async function POST(
-    request: Request,
+  request: Request,
 ) {
-    try {
-        let body: unknown;
+  let body: unknown;
 
-        try {
-            body = await request.json();
-        }
-        catch {
-            return jsonResponse(
-                {
-                    success: false,
-                    message: "Invalid request body.",
-                },
-                400,
-            );
-        }
+  try {
+    body =
+      await request.json();
+  } catch {
+    return errorResponse(
+      "Invalid request.",
+      400,
+    );
+  }
 
-        const parsed =
-            loginSchema.safeParse(body);
+  const parsed =
+    loginSchema.safeParse(body);
 
-        if (!parsed.success) {
-            return jsonResponse(
-                {
-                    success: false,
-                    message: "Invalid email or password.",
-                },
-                401,
-            );
-        }
+  if (!parsed.success) {
+    return errorResponse(
+      "Email and password are required.",
+      400,
+    );
+  }
 
-        const {
-            email,
-            password,
-        } = parsed.data;
+  const email =
+    parsed.data.email
+      .trim()
+      .toLowerCase();
 
-        const user =
-            await User.findOne({
-                where: {
-                    email,
-                },
-            });
+  const password =
+    parsed.data.password;
 
-        if (!user) {
-            return jsonResponse(
-                {
-                    success: false,
-                    message: "Invalid email or password.",
-                },
-                401,
-            );
-        }
+  try {
+    const user =
+      await User.findOne({
+        where: {
+          email,
+        },
 
-        const passwordHash = user.get("passwordHash");
+        attributes: [
+          "id",
+          "passwordHash",
+        ],
 
-        if (
-            typeof passwordHash !== "string" ||
-            passwordHash.length === 0
-        ) {
-            console.error("User account has no valid password hash.");
+        raw: true,
+      });
 
-            return jsonResponse(
-                {
-                    success: false,
-                    message: "Unable to sign in.",
-                },
-                500,
-            );
-        }
-
-        const passwordMatches = await bcrypt.compare(password,passwordHash);
-
-        if (!passwordMatches) {
-            return jsonResponse(
-                {
-                    success: false,
-                    message:"Invalid email or password.",
-                },
-                401,
-            );
-        }
-
-        const userId = user.get("id");
-
-        if (
-            typeof userId !== "string"
-        ) {
-            console.error("User record has an invalid id.");
-
-            return jsonResponse(
-                {
-                    success: false,
-                    message:"Unable to sign in.",
-                },
-                500,
-            );
-        }
-
-        
-        const membership = await OrganizationMembership.findOne({
-                where: {
-                    userId,
-                },
-                order: [
-                    ["createdAt", "ASC"],
-                ],
-            });
-
-        if (!membership) {
-            return jsonResponse(
-                {
-                    success: false,
-                    message: "Your account is not associated with an organization.",
-                },
-                403,
-            );
-        }
-
-        const organizationId = membership.get("organizationId");
-
-        const membershipId = membership.get("id");
-
-        const role = membership.get("role");
-
-        if (
-            typeof organizationId !== "string" ||
-            typeof membershipId !== "string" ||
-            typeof role !== "string"
-        ) {
-            console.error("User membership contains invalid authentication data.");
-
-            return jsonResponse(
-                {
-                    success: false,
-                    message:"Unable to sign in.",
-                },
-                500,
-            );
-        }
-
-        const token =
-            await createAccessToken({
-                userId,
-                organizationId,
-                membershipId,
-                role,
-            });
-
-        await setAuthCookie(token);
-
-        return jsonResponse({
-            success: true,
-            message: "Login successful.",
-        });
-    } catch (error) {
-        console.error(
-            "Login error:",
-            error instanceof Error
-                ? error.message
-                : "Unknown error",
-        );
-
-        return jsonResponse(
-            {
-                success: false,
-                message: "Unable to complete login.",
-            },
-            500,
-        );
+    if (
+      !user ||
+      typeof user.passwordHash !==
+        "string"
+    ) {
+      return errorResponse(
+        "Invalid email or password.",
+        401,
+      );
     }
+
+    const passwordMatches =
+      await bcrypt.compare(
+        password,
+        user.passwordHash,
+      );
+
+    if (!passwordMatches) {
+      return errorResponse(
+        "Invalid email or password.",
+        401,
+      );
+    }
+
+    const membership =
+      await OrganizationMembership.findOne(
+        {
+          where: {
+            userId: user.id,
+          },
+
+          attributes: ["id"],
+
+          raw: true,
+        },
+      );
+
+    if (!membership) {
+      return errorResponse(
+        "Your account is not associated with an organization.",
+        403,
+      );
+    }
+
+    const token =
+      await createAccessToken(
+        user.id,
+      );
+
+    await setAuthCookie(
+      token,
+    );
+
+    return NextResponse.json(
+      {
+        success: true,
+        message:
+          "Login successful.",
+      },
+      {
+        status: 200,
+        headers: {
+          "Cache-Control":
+            "no-store",
+        },
+      },
+    );
+  } catch (error) {
+    console.error(
+      "Login error:",
+      error,
+    );
+
+    return errorResponse(
+      "Unable to sign in. Please try again.",
+      500,
+    );
+  }
 }

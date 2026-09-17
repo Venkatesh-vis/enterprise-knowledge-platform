@@ -3,39 +3,49 @@ import "server-only";
 import { cookies } from "next/headers";
 
 export const AUTH_COOKIE_NAME =
-  process.env.NODE_ENV === "production" ? "__Host-ekp_access_token" : "ekp_access_token";
+  process.env.NODE_ENV ===
+  "production"
+    ? "__Host-ekp_access_token"
+    : "ekp_access_token";
 
-const COOKIE_MAX_AGE = 15 * 60;
+export const AUTH_COOKIE_MAX_AGE =
+  15 * 60;
+
+const baseCookieOptions = {
+  httpOnly: true,
+  secure:
+    process.env.NODE_ENV ===
+    "production",
+  sameSite: "lax" as const,
+  path: "/",
+};
 
 export async function setAuthCookie(
   token: string,
 ) {
-  const cookieStore = await cookies();
+  const store =
+    await cookies();
 
-  cookieStore.set(
+  store.set(
     AUTH_COOKIE_NAME,
     token,
     {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: COOKIE_MAX_AGE,
+      ...baseCookieOptions,
+      maxAge:
+        AUTH_COOKIE_MAX_AGE,
     },
   );
 }
 
 export async function clearAuthCookie() {
-  const cookieStore = await cookies();
+  const store =
+    await cookies();
 
-  cookieStore.set(
+  store.set(
     AUTH_COOKIE_NAME,
     "",
     {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
+      ...baseCookieOptions,
       maxAge: 0,
     },
   );

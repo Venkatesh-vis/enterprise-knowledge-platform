@@ -36,7 +36,7 @@ export default function NotFound() {
         {/* Action */}
         <div className="mt-8">
           <Link
-            href="/"
+            href="/dashboard"
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-slate-950 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-all hover:bg-slate-800 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
           >
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
