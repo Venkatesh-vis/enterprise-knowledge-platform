@@ -35,7 +35,7 @@ const Invitation = sequelize.define(
       unique: true,
     },
     activeKey: {
-      type: DataTypes.STRING(320),
+      type: DataTypes.STRING(64),
       allowNull: true,
       unique: true,
     },
@@ -72,9 +72,25 @@ const Invitation = sequelize.define(
     indexes: [
       { unique: true, fields: ["tokenHash"] },
       { unique: true, fields: ["activeKey"] },
-      { fields: ["organizationId", "status", "createdAt"] },
-      { fields: ["organizationId", "email"] },
-      { fields: ["organizationId", "expiresAt"] },
+      {
+        fields: [
+          "organizationId",
+          "status",
+          "createdAt",
+        ],
+      },
+      {
+        fields: [
+          "organizationId",
+          "email",
+        ],
+      },
+      {
+        fields: [
+          "organizationId",
+          "expiresAt",
+        ],
+      },
     ],
   },
 );
