@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MailPlus, Upload, Clock3, MailCheck, MailWarning, Users } from "lucide-react";
 
 import { Button } from "@/app/shared/ui/button";
@@ -20,10 +20,6 @@ export function InvitationsManager({ initialData }: { initialData: InvitationPag
   const setData = useInvitationStore((state) => state.setData);
   const add = useInvitationStore((state) => state.add);
   const update = useInvitationStore((state) => state.update);
-  const [ready, setReady] = useState(() => {
-    useInvitationStore.getState().setData(initialData);
-    return true;
-  });
   const [dialog, setDialog] = useState<"create" | "import" | null>(null);
   const [selected, setSelected] = useState<InvitationListItem | null>(null);
   const [action, setAction] = useState<"RESEND" | "REVOKE" | null>(null);
@@ -31,6 +27,10 @@ export function InvitationsManager({ initialData }: { initialData: InvitationPag
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    setData(initialData);
+  }, [initialData, setData]);
 
   const roles = useMemo(() => getInvitableRoleKeys(data.currentRole), [data.currentRole]);
   const invitations = useMemo(() => {
@@ -51,16 +51,26 @@ export function InvitationsManager({ initialData }: { initialData: InvitationPag
   }
 
   async function createInvitation(input: CreateInvitationInput) {
-    const response: any = await apiRequest({ path: "/api/invitations", method: "POST", body: input });
-    add(response.data.invitation);
-    notify(response.message);
+    try {
+      const response: any = await apiRequest({ path: "/api/invitations", method: "POST", body: input });
+      add(response.data.invitation);
+      notify(response.message);
+    } catch (caught) {
+      fail(caught);
+      throw caught;
+    }
   }
 
   async function importInvitations(inputs: ImportInvitationInput[]) {
-    const response: any = await apiRequest({ path: "/api/invitations/import", method: "POST", body: { invitations: inputs } });
-    response.data.created.forEach((item: InvitationListItem) => add(item));
-    notify(`${response.data.createdCount} invitation(s) imported.`);
-    if (response.data.failedEmails.length) setError(`Skipped: ${response.data.failedEmails.join(", ")}`);
+    try {
+      const response: any = await apiRequest({ path: "/api/invitations/import", method: "POST", body: { invitations: inputs } });
+      response.data.created.forEach((item: InvitationListItem) => add(item));
+      notify(`${response.data.createdCount} invitation(s) imported.`);
+      if (response.data.failedEmails.length) setError(`Skipped: ${response.data.failedEmails.join(", ")}`);
+    } catch (caught) {
+      fail(caught);
+      throw caught;
+    }
   }
 
   async function confirmAction() {
@@ -82,7 +92,7 @@ export function InvitationsManager({ initialData }: { initialData: InvitationPag
   return (
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-        <div><h1 className="text-2xl font-semibold text-slate-950">Invitations</h1><p className="mt-1 text-sm text-slate-500">Manage organization invitations without losing server state.</p></div>
+        <div><h1 className="text-2xl font-semibold text-slate-950">Invitations</h1><p className="mt-1 text-sm text-slate-500">Manage organization invitations without a page refresh.</p></div>
         <div className="flex gap-2">
           {data.permissions.canImport && <Button type="button" variant="ghost" onClick={() => setDialog("import")}><Upload className="mr-2 h-4 w-4" />Import</Button>}
           {data.permissions.canCreate && <Button type="button" onClick={() => setDialog("create")}><MailPlus className="mr-2 h-4 w-4" />Invite</Button>}
@@ -99,8 +109,8 @@ export function InvitationsManager({ initialData }: { initialData: InvitationPag
       {(notice || error) && <div className={`rounded-xl px-4 py-3 text-sm ${error ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{error || notice}</div>}
 
       <div className="rounded-2xl border border-slate-200 bg-white">
-        <div className="border-b border-slate-100 p-4"><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search current invitations..." className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-slate-400" /></div>
-        {invitations.length ? <InvitationTable invitations={invitations} canResend={data.permissions.canResend} canRevoke={data.permissions.canRevoke} onView={setSelected} onResend={(item) => { setSelected(item); setAction("RESEND"); }} onRevoke={(item) => { setSelected(item); setAction("REVOKE"); }} /> : <div className="p-10 text-center text-sm text-slate-500">No invitations found.</div>}
+        <div className="border-b border-slate-100 p-4"><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search loaded invitations..." className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-slate-400" /></div>
+        {invitations.length ? <InvitationTable invitations={invitations} canResend={data.permissions.canResend} canRevoke={data.permissions.canRevoke} onView={(item) => setSelected(item)} onResend={(item) => { setSelected(item); setAction("RESEND"); }} onRevoke={(item) => { setSelected(item); setAction("REVOKE"); }} /> : <div className="p-10 text-center text-sm text-slate-500">No invitations found.</div>}
       </div>
 
       <InvitationFormDialog open={dialog === "create"} roles={roles} existingEmails={data.invitations.map((item) => item.email)} onClose={() => setDialog(null)} onCreate={createInvitation} />
