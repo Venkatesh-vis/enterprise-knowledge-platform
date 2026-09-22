@@ -28,9 +28,7 @@ export function InvitationsManager({ initialData }: { initialData: InvitationPag
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
 
-  useEffect(() => {
-    setData(initialData);
-  }, [initialData, setData]);
+  useEffect(() => setData(initialData), [initialData, setData]);
 
   const roles = useMemo(() => getInvitableRoleKeys(data.currentRole), [data.currentRole]);
   const invitations = useMemo(() => {
@@ -57,7 +55,6 @@ export function InvitationsManager({ initialData }: { initialData: InvitationPag
       notify(response.message);
     } catch (caught) {
       fail(caught);
-      throw caught;
     }
   }
 
@@ -69,7 +66,6 @@ export function InvitationsManager({ initialData }: { initialData: InvitationPag
       if (response.data.failedEmails.length) setError(`Skipped: ${response.data.failedEmails.join(", ")}`);
     } catch (caught) {
       fail(caught);
-      throw caught;
     }
   }
 
