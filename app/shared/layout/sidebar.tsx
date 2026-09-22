@@ -102,7 +102,7 @@ const managementItems: NavigationItem[] = [
   },
   {
     label: "History",
-    href: "/audit-logs",
+    href: "/history",
     icon: History,
     permission: "AUDIT_LOG_READ",
   },
@@ -243,7 +243,6 @@ export default function Sidebar() {
         state.permissions,
     );
 
-    console.log("permissions", permissions);
 
   const visibleWorkspaceItems =
     workspaceItems.filter(

@@ -1,25 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
-
 import {
   usePathname,
   useRouter,
   useSearchParams,
 } from "next/navigation";
-
 import {
   BriefcaseBusiness,
   Search,
   ShieldCheck,
   Users as UsersIcon,
 } from "lucide-react";
-
-import {
-  useMemo,
-  useState,
-} from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type {
   UserListItem,
@@ -36,9 +29,7 @@ import { RoleBadge } from "./role-badge";
 import { UserFormDialog } from "./user-form-dialog";
 import { UserRemoveDialog } from "./user-remove-dialog";
 
-function initials(
-  name: string,
-) {
+function initials(name: string) {
   const parts = name
     .trim()
     .split(/\s+/)
@@ -54,14 +45,11 @@ function initials(
       .toUpperCase();
   }
 
-  return `${parts[0][0]}${
-    parts.at(-1)?.[0] ?? ""
-  }`.toUpperCase();
+  return `${parts[0][0]}${parts.at(-1)?.[0] ?? ""
+    }`.toUpperCase();
 }
 
-function formatDate(
-  value: string,
-) {
+function formatDate(value: string) {
   return new Intl.DateTimeFormat(
     "en-IN",
     {
@@ -69,9 +57,7 @@ function formatDate(
       month: "short",
       year: "numeric",
     },
-  ).format(
-    new Date(value),
-  );
+  ).format(new Date(value));
 }
 
 function updateQueryString(
@@ -82,10 +68,9 @@ function updateQueryString(
     string | null
   >,
 ) {
-  const params =
-    new URLSearchParams(
-      currentSearch,
-    );
+  const params = new URLSearchParams(
+    currentSearch,
+  );
 
   for (const [
     key,
@@ -149,11 +134,9 @@ function UserAvatar({
   return (
     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700 ring-1 ring-inset ring-slate-200">
       {user.image ? (
-        <Image
+        <img
           src={user.image}
           alt=""
-          width={40}
-          height={40}
           className="h-full w-full rounded-full object-cover"
         />
       ) : (
@@ -170,20 +153,25 @@ export function UsersDirectory({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const [updatedUsers, setUpdatedUsers] = useState<UserListItem[]>([]);
-  const [removedUserIds, setRemovedUserIds] = useState<string[]>([]);
-  const users = useMemo(
-    () =>
-      data.users
-        .filter((user) => !removedUserIds.includes(user.id))
-        .map(
-          (user) =>
-            updatedUsers.find((updatedUser) => updatedUser.id === user.id) ??
-            user,
-        ),
-    [data.users, removedUserIds, updatedUsers],
-  );
+  const searchParams =
+    useSearchParams();
+
+  /*
+   * Keep the displayed directory data
+   * locally updated after role changes/removals.
+   */
+  const [users, setUsers] =
+    useState<UserListItem[]>(
+      data.users,
+    );
+
+  const [stats, setStats] =
+    useState(data.stats);
+
+  const [
+    searchInput,
+    setSearchInput,
+  ] = useState("");
 
   const [
     editingUser,
@@ -219,8 +207,13 @@ export function UsersDirectory({
   ] = useState("");
 
   /*
-   * Read filters directly from
-   * the URL.
+   * Read filters directly from the URL.
+   *
+   * Current service contract:
+   * search
+   * roleId
+   * page
+   * pageSize
    */
   const currentSearch =
     searchParams.get(
@@ -230,7 +223,26 @@ export function UsersDirectory({
   const currentRoleId =
     searchParams.get(
       "roleId",
-    ) ?? "";
+    ) ?? "ALL";
+
+  /*
+   * Keep local UI state synchronized with
+   * the latest server-rendered result.
+   *
+   * Search/filter changes update the table
+   * data, but never the organization stats.
+   */
+  useEffect(() => {
+    setUsers(data.users);
+  }, [data.users]);
+
+  useEffect(() => {
+    setStats(data.stats);
+  }, [data.stats]);
+
+  useEffect(() => {
+    setSearchInput(currentSearch);
+  }, [currentSearch]);
 
   const currentPage =
     data.pagination.page;
@@ -246,7 +258,7 @@ export function UsersDirectory({
 
   const hasFilters =
     Boolean(currentSearch) ||
-    Boolean(currentRoleId);
+    currentRoleId !== "ALL";
 
   const pageNumbers =
     useMemo(() => {
@@ -281,7 +293,7 @@ export function UsersDirectory({
           (page) =>
             page >= 1 &&
             page <=
-              totalPages,
+            totalPages,
         )
         .sort(
           (a, b) =>
@@ -301,7 +313,7 @@ export function UsersDirectory({
     router.push(
       updateQueryString(
         pathname,
-        searchParams.toString(),
+        `?${searchParams.toString()}`,
         changes,
       ),
     );
@@ -320,24 +332,22 @@ export function UsersDirectory({
     );
   }
 
-  /*
-   * IMPORTANT:
-   * roleId must contain the actual
-   * database role ID, because the
-   * service filters by roleId.
-   */
-  const roleFilterOptions = [
-    {
-      value: "",
-      label: "All roles",
-    },
-    ...data.roles.map(
-      (role) => ({
-        value: role.id,
-        label: role.name,
-      }),
-    ),
-  ];
+  const roleFilterOptions =
+    useMemo(
+      () => [
+        {
+          value: "ALL",
+          label: "All roles",
+        },
+        ...data.roles.map(
+          (role) => ({
+            value: role.id,
+            label: role.name,
+          }),
+        ),
+      ],
+      [data.roles],
+    );
 
   async function handleRoleUpdate(
     userId: string,
@@ -352,31 +362,25 @@ export function UsersDirectory({
     );
 
     try {
+      type UserRoleUpdateResponse = {
+        success: boolean;
+        message?: string;
+        data: {
+          user: UserListItem;
+          permissions: unknown[];
+        };
+      };
+
       const response =
-        await apiRequest<{
-          success: boolean;
-
-          message?: string;
-
-          data?: {
-            user: UserListItem;
-          };
-        }>({
-          path: `/api/users/${encodeURIComponent(
-            userId,
-          )}`,
-
+        await apiRequest<UserRoleUpdateResponse>({
+          path: `/api/users/${encodeURIComponent(userId)}`,
           method: "PATCH",
-
           body: {
             roleId,
           },
         });
 
-      if (
-        !response.success ||
-        !response.data
-      ) {
+      if (!response.success) {
         throw new Error(
           response.message ??
             "Unable to update the user role.",
@@ -386,14 +390,99 @@ export function UsersDirectory({
       const updatedUser =
         response.data.user;
 
-      setUpdatedUsers(
-        (currentUsers) => [
-          ...currentUsers.filter(
-            (user) => user.id !== updatedUser.id,
-          ),
-          updatedUser,
-        ],
-      );
+      const previousUser =
+        users.find(
+          (user) =>
+            user.id === userId,
+        );
+
+      setUsers((currentUsers) => {
+        const nextUsers =
+          currentUsers.map(
+            (user) =>
+              user.id ===
+              updatedUser.id
+                ? updatedUser
+                : user,
+          );
+
+        /*
+         * A user that no longer matches the
+         * active role filter must disappear
+         * immediately from the current view.
+         */
+        if (
+          currentRoleId !== "ALL" &&
+          updatedUser.roleId !==
+            currentRoleId
+        ) {
+          return nextUsers.filter(
+            (user) =>
+              user.id !==
+              updatedUser.id,
+          );
+        }
+
+        return nextUsers;
+      });
+
+      if (
+        previousUser &&
+        previousUser.roleKey !==
+          updatedUser.roleKey
+      ) {
+        setStats((currentStats) => {
+          const nextStats = {
+            ...currentStats,
+          };
+
+          if (
+            previousUser.roleKey ===
+            "OWNER"
+          ) {
+            nextStats.owners -= 1;
+          } else if (
+            previousUser.roleKey ===
+            "ADMIN"
+          ) {
+            nextStats.admins -= 1;
+          } else if (
+            previousUser.roleKey ===
+            "MANAGER"
+          ) {
+            nextStats.managers -= 1;
+          } else if (
+            previousUser.roleKey ===
+            "MEMBER"
+          ) {
+            nextStats.members -= 1;
+          }
+
+          if (
+            updatedUser.roleKey ===
+            "OWNER"
+          ) {
+            nextStats.owners += 1;
+          } else if (
+            updatedUser.roleKey ===
+            "ADMIN"
+          ) {
+            nextStats.admins += 1;
+          } else if (
+            updatedUser.roleKey ===
+            "MANAGER"
+          ) {
+            nextStats.managers += 1;
+          } else if (
+            updatedUser.roleKey ===
+            "MEMBER"
+          ) {
+            nextStats.members += 1;
+          }
+
+          return nextStats;
+        });
+      }
 
       setEditingUser(
         null,
@@ -402,6 +491,8 @@ export function UsersDirectory({
       showNotice(
         "User role updated successfully.",
       );
+
+      router.refresh();
 
       return true;
     } catch (error) {
@@ -425,12 +516,71 @@ export function UsersDirectory({
   function handleUserRemoved(
     userId: string,
   ) {
-    setRemovedUserIds(
-      (currentUserIds) => [
-        ...currentUserIds,
-        userId,
-      ],
+    const removedUser =
+      users.find(
+        (user) =>
+          user.id === userId,
+      );
+
+    setUsers(
+      (currentUsers) =>
+        currentUsers.filter(
+          (user) =>
+            user.id !== userId,
+        ),
     );
+
+    if (removedUser) {
+      setStats((currentStats) => {
+        const nextStats = {
+          ...currentStats,
+        };
+
+        nextStats.total =
+          Math.max(
+            0,
+            nextStats.total - 1,
+          );
+
+        switch (
+          removedUser.roleKey
+        ) {
+          case "OWNER":
+            nextStats.owners =
+              Math.max(
+                0,
+                nextStats.owners - 1,
+              );
+            break;
+
+          case "ADMIN":
+            nextStats.admins =
+              Math.max(
+                0,
+                nextStats.admins - 1,
+              );
+            break;
+
+          case "MANAGER":
+            nextStats.managers =
+              Math.max(
+                0,
+                nextStats.managers - 1,
+              );
+            break;
+
+          case "MEMBER":
+            nextStats.members =
+              Math.max(
+                0,
+                nextStats.members - 1,
+              );
+            break;
+        }
+
+        return nextStats;
+      });
+    }
 
     setRemovingUser(
       null,
@@ -441,9 +591,15 @@ export function UsersDirectory({
     );
 
     /*
-     * If the current page became
-     * empty, move to the previous
-     * page.
+     * Refresh the server-rendered directory so
+     * pagination and totals reconcile with the
+     * mutation immediately.
+     */
+    router.refresh();
+
+    /*
+     * If the current page became empty,
+     * move to the previous page.
      */
     if (
       users.length === 1 &&
@@ -493,7 +649,7 @@ export function UsersDirectory({
         <StatCard
           label="Total users"
           value={
-            data.stats.total
+            stats.total
           }
           icon={UsersIcon}
         />
@@ -501,7 +657,7 @@ export function UsersDirectory({
         <StatCard
           label="Administrators"
           value={
-            data.stats.admins
+            stats.admins
           }
           icon={ShieldCheck}
         />
@@ -509,7 +665,7 @@ export function UsersDirectory({
         <StatCard
           label="Managers"
           value={
-            data.stats.managers
+            stats.managers
           }
           icon={BriefcaseBusiness}
         />
@@ -517,7 +673,7 @@ export function UsersDirectory({
         <StatCard
           label="Members"
           value={
-            data.stats.members
+            stats.members
           }
           icon={UsersIcon}
         />
@@ -553,10 +709,12 @@ export function UsersDirectory({
               <Search className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-slate-400" />
 
               <Input
-                key={currentSearch}
                 name="search"
-                defaultValue={
-                  currentSearch
+                value={searchInput}
+                onChange={(event) =>
+                  setSearchInput(
+                    event.target.value,
+                  )
                 }
                 placeholder="Search by name or email"
                 className="h-11 pl-10"
@@ -582,7 +740,10 @@ export function UsersDirectory({
               ) => {
                 navigate({
                   roleId:
-                    value || null,
+                    value ===
+                      "ALL"
+                      ? null
+                      : value,
                   page: "1",
                 });
               }}
@@ -595,7 +756,7 @@ export function UsersDirectory({
         </div>
 
         {!hasUsers &&
-        hasFilters ? (
+          hasFilters ? (
           <div className="p-12 text-center">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
               <Search className="h-5 w-5" />
@@ -737,14 +898,13 @@ export function UsersDirectory({
 
                             {data.canUpdate &&
                               user.id !==
-                                data.currentUserId && (
+                              data.currentUserId && (
                                 <button
                                   type="button"
                                   onClick={() => {
                                     setRoleUpdateError(
                                       null,
                                     );
-
                                     setEditingUser(
                                       user,
                                     );
@@ -757,12 +917,12 @@ export function UsersDirectory({
 
                             {data.canDelete &&
                               user.id !==
-                                data.currentUserId &&
+                              data.currentUserId &&
                               (
                                 user.roleKey !==
-                                  "OWNER" ||
+                                "OWNER" ||
                                 data.currentRole ===
-                                  "OWNER"
+                                "OWNER"
                               ) && (
                                 <button
                                   type="button"
@@ -851,14 +1011,13 @@ export function UsersDirectory({
 
                         {data.canUpdate &&
                           user.id !==
-                            data.currentUserId && (
+                          data.currentUserId && (
                             <button
                               type="button"
                               onClick={() => {
                                 setRoleUpdateError(
                                   null,
                                 );
-
                                 setEditingUser(
                                   user,
                                 );
@@ -871,12 +1030,12 @@ export function UsersDirectory({
 
                         {data.canDelete &&
                           user.id !==
-                            data.currentUserId &&
+                          data.currentUserId &&
                           (
                             user.roleKey !==
-                              "OWNER" ||
+                            "OWNER" ||
                             data.currentRole ===
-                              "OWNER"
+                            "OWNER"
                           ) && (
                             <button
                               type="button"
@@ -926,7 +1085,7 @@ export function UsersDirectory({
                     navigate({
                       page: String(
                         currentPage -
-                          1,
+                        1,
                       ),
                     })
                   }
@@ -942,15 +1101,15 @@ export function UsersDirectory({
                   ) => {
                     const previous =
                       pageNumbers[
-                        index - 1
+                      index - 1
                       ];
 
                     const gap =
                       previous !==
-                        undefined &&
+                      undefined &&
                       page -
-                        previous >
-                        1;
+                      previous >
+                      1;
 
                     return (
                       <span
@@ -974,12 +1133,11 @@ export function UsersDirectory({
                               ),
                             })
                           }
-                          className={`h-8 min-w-8 cursor-pointer rounded-lg px-2 text-xs font-semibold transition ${
-                            page ===
-                            currentPage
+                          className={`h-8 min-w-8 cursor-pointer rounded-lg px-2 text-xs font-semibold transition ${page ===
+                              currentPage
                               ? "bg-slate-950 text-white"
                               : "text-slate-600 hover:bg-slate-100"
-                          }`}
+                            }`}
                         >
                           {page}
                         </button>
@@ -998,7 +1156,7 @@ export function UsersDirectory({
                     navigate({
                       page: String(
                         currentPage +
-                          1,
+                        1,
                       ),
                     })
                   }
@@ -1034,13 +1192,10 @@ export function UsersDirectory({
           roleUpdateError
         }
         onClose={() => {
-          if (
-            !isUpdatingRole
-          ) {
+          if (!isUpdatingRole) {
             setEditingUser(
               null,
             );
-
             setRoleUpdateError(
               null,
             );
@@ -1073,7 +1228,8 @@ export function UsersDirectory({
         }
         onSuccess={() => {
           if (
-            removingUser?.id
+            removingUser
+              ?.id
           ) {
             handleUserRemoved(
               removingUser.id,

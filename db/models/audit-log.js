@@ -1,5 +1,4 @@
 import { DataTypes } from "sequelize";
-
 import sequelize from "../../lib/database";
 
 const AuditLog = sequelize.define(
@@ -18,6 +17,16 @@ const AuditLog = sequelize.define(
 
     actorUserId: {
       type: DataTypes.STRING(191),
+      allowNull: false,
+    },
+
+    actorName: {
+      type: DataTypes.STRING(100),
+      allowNull: false,
+    },
+
+    actorEmail: {
+      type: DataTypes.STRING(255),
       allowNull: false,
     },
 
@@ -41,6 +50,16 @@ const AuditLog = sequelize.define(
       allowNull: true,
     },
 
+    targetUserName: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
+
+    targetUserEmail: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+
     metadata: {
       type: DataTypes.JSON,
       allowNull: true,
@@ -55,10 +74,16 @@ const AuditLog = sequelize.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+
+    createdAt: {
+      type: DataTypes.DATE,
+      allowNull: false,
+    },
   },
   {
     tableName: "audit_logs",
-    timestamps: true,
+    timestamps: false,
+
     indexes: [
       {
         fields: [
@@ -68,24 +93,28 @@ const AuditLog = sequelize.define(
       },
       {
         fields: [
-          "actorUserId",
-          "createdAt",
-        ],
-      },
-      {
-        fields: [
+          "organizationId",
           "action",
           "createdAt",
         ],
       },
       {
         fields: [
+          "organizationId",
           "resource",
-          "resourceId",
+          "createdAt",
         ],
       },
       {
         fields: [
+          "organizationId",
+          "actorUserId",
+          "createdAt",
+        ],
+      },
+      {
+        fields: [
+          "organizationId",
           "targetUserId",
           "createdAt",
         ],

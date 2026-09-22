@@ -1,4 +1,3 @@
-import * as React from "react";
 
 type AvatarSize = "sm" | "md" | "lg";
 

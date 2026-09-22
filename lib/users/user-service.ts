@@ -1,9 +1,14 @@
 import "server-only";
 
-import { Op } from "sequelize";
+import {
+  Op,
+  type Transaction,
+} from "sequelize";
+
 import { randomUUID } from "crypto";
 
 import User from "@/db/models/user";
+import sequelize from "@/lib/database";
 import Organization from "@/db/models/organization";
 import OrganizationMembership from "@/db/models/organization-membership";
 import Role from "@/db/models/role";
@@ -15,6 +20,10 @@ import {
   requirePermission,
 } from "@/lib/auth/authorization";
 
+import {
+  createAuditLog,
+} from "@/lib/audit/audit-service";
+
 import type {
   UserDetailData,
   UserListItem,
@@ -23,13 +32,12 @@ import type {
   UsersDirectoryData,
 } from "./types";
 
-
 import type {
   UpdateUserRoleInput,
 } from "./validation";
 
-const SYSTEM_ROLE_KEYS: readonly UserRoleKey[] =
-  [
+const SYSTEM_ROLE_KEYS:
+  readonly UserRoleKey[] = [
     "OWNER",
     "ADMIN",
     "MANAGER",
@@ -37,7 +45,11 @@ const SYSTEM_ROLE_KEYS: readonly UserRoleKey[] =
   ];
 
 export class UserServiceError extends Error {
-  status: 400 | 404 | 409 | 500;
+  status:
+    | 400
+    | 404
+    | 409
+    | 500;
 
   constructor(
     message: string,
@@ -52,7 +64,8 @@ export class UserServiceError extends Error {
     this.name =
       "UserServiceError";
 
-    this.status = status;
+    this.status =
+      status;
   }
 }
 
@@ -60,10 +73,14 @@ function isUserRoleKey(
   value: unknown,
 ): value is UserRoleKey {
   return (
-    value === "OWNER" ||
-    value === "ADMIN" ||
-    value === "MANAGER" ||
-    value === "MEMBER"
+    value ===
+      "OWNER" ||
+    value ===
+      "ADMIN" ||
+    value ===
+      "MANAGER" ||
+    value ===
+      "MEMBER"
   );
 }
 
@@ -71,28 +88,50 @@ function canAssignRole(
   actorRole: UserRoleKey,
   targetRole: UserRoleKey,
 ) {
-  if (targetRole === "OWNER") {
-    return actorRole === "OWNER";
+  if (
+    targetRole ===
+    "OWNER"
+  ) {
+    return (
+      actorRole ===
+      "OWNER"
+    );
   }
 
-  if (actorRole === "OWNER") {
+  if (
+    actorRole ===
+    "OWNER"
+  ) {
     return [
       "ADMIN",
       "MANAGER",
       "MEMBER",
-    ].includes(targetRole);
+    ].includes(
+      targetRole,
+    );
   }
 
-  if (actorRole === "ADMIN") {
+  if (
+    actorRole ===
+    "ADMIN"
+  ) {
     return [
       "ADMIN",
       "MANAGER",
       "MEMBER",
-    ].includes(targetRole);
+    ].includes(
+      targetRole,
+    );
   }
 
-  if (actorRole === "MANAGER") {
-    return targetRole === "MEMBER";
+  if (
+    actorRole ===
+    "MANAGER"
+  ) {
+    return (
+      targetRole ===
+      "MEMBER"
+    );
   }
 
   return false;
@@ -100,6 +139,7 @@ function canAssignRole(
 
 async function getRoleById(
   roleId: string,
+  transaction?: Transaction,
 ) {
   const role =
     await Role.findByPk(
@@ -112,7 +152,10 @@ async function getRoleById(
           "description",
           "isSystemRole",
         ],
+
         raw: true,
+
+        transaction,
       },
     );
 
@@ -124,7 +167,9 @@ async function getRoleById(
   }
 
   if (
-    !isUserRoleKey(role.key)
+    !isUserRoleKey(
+      role.key,
+    )
   ) {
     throw new UserServiceError(
       "The selected role is invalid.",
@@ -132,7 +177,9 @@ async function getRoleById(
     );
   }
 
-  if (!role.isSystemRole) {
+  if (
+    !role.isSystemRole
+  ) {
     throw new UserServiceError(
       "Only system roles can currently be assigned.",
       400,
@@ -142,12 +189,50 @@ async function getRoleById(
   return role;
 }
 
+async function getRoleKeyById(
+  roleId: string,
+  transaction?: Transaction,
+) {
+  const role =
+    await Role.findByPk(
+      roleId,
+      {
+        attributes: [
+          "id",
+          "key",
+        ],
+
+        raw: true,
+
+        transaction,
+      },
+    );
+
+  if (
+    !role ||
+    !isUserRoleKey(
+      role.key,
+    )
+  ) {
+    throw new UserServiceError(
+      "The previous user role could not be resolved.",
+      500,
+    );
+  }
+
+  return role.key;
+}
+
 async function getMembership({
   userId,
   organizationId,
+  transaction,
 }: {
   userId: string;
+
   organizationId: string;
+
+  transaction?: Transaction;
 }) {
   if (!userId) {
     throw new UserServiceError(
@@ -164,20 +249,35 @@ async function getMembership({
   }
 
   const membership =
-    await OrganizationMembership.findOne({
-      where: {
-        userId,
-        organizationId,
+    await OrganizationMembership.findOne(
+      {
+        where: {
+          userId,
+
+          organizationId,
+        },
+
+        attributes: [
+          "id",
+          "userId",
+          "organizationId",
+          "roleId",
+          "createdAt",
+        ],
+
+        raw: true,
+
+        transaction,
+
+        ...(transaction
+          ? {
+              lock:
+                transaction.LOCK
+                  .UPDATE,
+            }
+          : {}),
       },
-      attributes: [
-        "id",
-        "userId",
-        "organizationId",
-        "roleId",
-        "createdAt",
-      ],
-      raw: true,
-    });
+    );
 
   if (!membership) {
     throw new UserServiceError(
@@ -197,7 +297,9 @@ async function toUserListItem(
 ): Promise<UserListItem> {
   const user =
     await User.findByPk(
-      String(membership.userId),
+      String(
+        membership.userId,
+      ),
       {
         attributes: [
           "id",
@@ -207,6 +309,7 @@ async function toUserListItem(
           "emailVerified",
           "createdAt",
         ],
+
         raw: true,
       },
     );
@@ -220,20 +323,25 @@ async function toUserListItem(
 
   const role =
     await Role.findByPk(
-      String(membership.roleId),
+      String(
+        membership.roleId,
+      ),
       {
         attributes: [
           "id",
           "name",
           "key",
         ],
+
         raw: true,
       },
     );
 
   if (
     !role ||
-    !isUserRoleKey(role.key)
+    !isUserRoleKey(
+      role.key,
+    )
   ) {
     throw new UserServiceError(
       "User role could not be resolved.",
@@ -242,23 +350,39 @@ async function toUserListItem(
   }
 
   return {
-    id: String(user.id),
-    membershipId: String(
-      membership.id,
+    id: String(
+      user.id,
     ),
+
+    membershipId:
+      String(
+        membership.id,
+      ),
+
     name: user.name,
+
     email: user.email,
+
     image:
-      user.image ?? null,
+      user.image ??
+      null,
+
     emailVerified:
       Boolean(
         user.emailVerified,
       ),
-    roleId: String(
-      membership.roleId,
-    ),
-    roleKey: role.key,
-    roleName: role.name,
+
+    roleId:
+      String(
+        membership.roleId,
+      ),
+
+    roleKey:
+      role.key,
+
+    roleName:
+      role.name,
+
     joinedAt:
       new Date(
         String(
@@ -271,80 +395,83 @@ async function toUserListItem(
 export async function getUsersDirectoryData(
   input: {
     search?: string;
+
     roleId?: string;
+
     page?: number;
+
     pageSize?: number;
   },
 ): Promise<UsersDirectoryData> {
   const actor =
-    await requirePermission("USER_READ");
+    await requirePermission(
+      "USER_READ",
+    );
 
   const search =
-    input.search?.trim() ?? "";
+    input.search
+      ?.trim() ?? "";
 
-  const pageSize = Math.min(
+  const pageSize =
+    Math.min(
+      Math.max(
+        input.pageSize ??
+          20,
+        1,
+      ),
+      100,
+    );
+
+  const requestedPage =
     Math.max(
-      input.pageSize ?? 20,
+      input.page ?? 1,
       1,
-    ),
-    100,
-  );
+    );
 
-  const requestedPage = Math.max(
-    input.page ?? 1,
-    1,
-  );
-
-  /*
-   * Always restrict users to the actor's
-   * current organization.
-   */
-  const membershipWhere: Record<
-    string,
-    unknown
-  > = {
+  const membershipWhere:
+    Record<
+      string,
+      unknown
+    > = {
     organizationId:
       actor.organization.id,
   };
 
-  if (input.roleId) {
-    membershipWhere.roleId =
-      input.roleId;
-  }
-
-  /*
-   * No Sequelize associations.
-   *
-   * Fetch organization memberships directly.
-   */
   const memberships =
-    await OrganizationMembership.findAll({
-      where: membershipWhere,
-      attributes: [
-        "id",
-        "userId",
-        "organizationId",
-        "roleId",
-        "createdAt",
-      ],
-      order: [
-        ["createdAt", "DESC"],
-      ],
-      raw: true,
-    });
+    await OrganizationMembership.findAll(
+      {
+        where:
+          membershipWhere,
 
-  /*
-   * Fetch selectable system roles.
-   *
-   * This is also used when there are no
-   * organization memberships.
-   */
+        attributes: [
+          "id",
+          "userId",
+          "organizationId",
+          "roleId",
+          "createdAt",
+        ],
+
+        order: [
+          [
+            "createdAt",
+            "DESC",
+          ],
+        ],
+
+        raw: true,
+      },
+    );
+
   const roleRows =
     await Role.findAll({
       where: {
-        isSystemRole: true,
-        key: SYSTEM_ROLE_KEYS,
+        isSystemRole:
+          true,
+
+        key:
+          SYSTEM_ROLE_KEYS,
       },
+
       attributes: [
         "id",
         "name",
@@ -352,45 +479,64 @@ export async function getUsersDirectoryData(
         "description",
         "isSystemRole",
       ],
+
       order: [
-        ["name", "ASC"],
+        [
+          "name",
+          "ASC",
+        ],
       ],
+
       raw: true,
     });
 
-  const roles: UserRoleOption[] =
+  const roles:
+    UserRoleOption[] =
     roleRows
-      .filter((role) =>
-        isUserRoleKey(
-          role.key,
-        ),
-      )
-      .map((role) => ({
-        id: String(role.id),
-        key:
-          role.key as UserRoleKey,
-        name: String(
-          role.name,
-        ),
-        description:
-          role.description ?? null,
-        isSystemRole:
-          Boolean(
-            role.isSystemRole,
+      .filter(
+        (role) =>
+          isUserRoleKey(
+            role.key,
           ),
-      }));
+      )
+      .map(
+        (role) => ({
+          id: String(
+            role.id,
+          ),
 
-  /*
-   * No organization members.
-   */
-  if (memberships.length === 0) {
+          key:
+            role.key as UserRoleKey,
+
+          name: String(
+            role.name,
+          ),
+
+          description:
+            role.description ??
+            null,
+
+          isSystemRole:
+            Boolean(
+              role.isSystemRole,
+            ),
+        }),
+      );
+
+  if (
+    memberships.length ===
+    0
+  ) {
     return {
       users: [],
 
       pagination: {
         page: 1,
+
         pageSize,
+
         totalItems: 0,
+
         totalPages: 1,
       },
 
@@ -398,155 +544,189 @@ export async function getUsersDirectoryData(
 
       stats: {
         total: 0,
+
         owners: 0,
+
         admins: 0,
+
         managers: 0,
+
         members: 0,
       },
     };
   }
 
-  /*
-   * Fetch all related users and roles directly.
-   */
   const userIds =
     memberships.map(
-      (membership) =>
-        String(membership.userId),
+      (
+        membership,
+      ) =>
+        String(
+          membership.userId,
+        ),
     );
 
   const membershipRoleIds =
     memberships.map(
-      (membership) =>
-        String(membership.roleId),
+      (
+        membership,
+      ) =>
+        String(
+          membership.roleId,
+        ),
     );
 
   const [
     userRows,
     membershipRoleRows,
-  ] = await Promise.all([
-    User.findAll({
-      where: {
-        id: {
-          [Op.in]: userIds,
+  ] =
+    await Promise.all([
+      User.findAll({
+        where: {
+          id: {
+            [Op.in]:
+              userIds,
+          },
         },
-      },
-      attributes: [
-        "id",
-        "name",
-        "email",
-        "image",
-        "emailVerified",
-        "createdAt",
-      ],
-      raw: true,
-    }),
 
-    Role.findAll({
-      where: {
-        id: {
-          [Op.in]:
-            membershipRoleIds,
+        attributes: [
+          "id",
+          "name",
+          "email",
+          "image",
+          "emailVerified",
+          "createdAt",
+        ],
+
+        raw: true,
+      }),
+
+      Role.findAll({
+        where: {
+          id: {
+            [Op.in]:
+              membershipRoleIds,
+          },
         },
-      },
-      attributes: [
-        "id",
-        "name",
-        "key",
-      ],
-      raw: true,
-    }),
-  ]);
+
+        attributes: [
+          "id",
+          "name",
+          "key",
+        ],
+
+        raw: true,
+      }),
+    ]);
 
   const usersById =
     new Map(
-      userRows.map((user) => [
-        String(user.id),
-        user,
-      ]),
+      userRows.map(
+        (user) => [
+          String(
+            user.id,
+          ),
+          user,
+        ],
+      ),
     );
 
   const rolesById =
     new Map(
       membershipRoleRows.map(
         (role) => [
-          String(role.id),
+          String(
+            role.id,
+          ),
           role,
         ],
       ),
     );
 
-  /*
-   * Build directory rows.
-   */
   const allRows =
     memberships
-      .map((membership) => {
-        const user =
-          usersById.get(
-            String(
-              membership.userId,
-            ),
-          );
-
-        const role =
-          rolesById.get(
-            String(
-              membership.roleId,
-            ),
-          );
-
-        if (!user || !role) {
-          return null;
-        }
-
-        if (
-          !isUserRoleKey(
-            role.key,
-          )
-        ) {
-          return null;
-        }
-
-        return {
+      .map(
+        (
           membership,
-          user,
-          role,
-        };
-      })
+        ) => {
+          const user =
+            usersById.get(
+              String(
+                membership.userId,
+              ),
+            );
+
+          const role =
+            rolesById.get(
+              String(
+                membership.roleId,
+              ),
+            );
+
+          if (
+            !user ||
+            !role
+          ) {
+            return null;
+          }
+
+          if (
+            !isUserRoleKey(
+              role.key,
+            )
+          ) {
+            return null;
+          }
+
+          return {
+            membership,
+            user,
+            role,
+          };
+        },
+      )
       .filter(
         (
           row,
         ): row is {
-          membership: Record<
-            string,
-            unknown
-          >;
-          user: Record<
-            string,
-            unknown
-          >;
-          role: Record<
-            string,
-            unknown
-          >;
-        } => row !== null,
+          membership:
+            Record<
+              string,
+              unknown
+            >;
+
+          user:
+            Record<
+              string,
+              unknown
+            >;
+
+          role:
+            Record<
+              string,
+              unknown
+            >;
+        } =>
+          row !== null,
       );
 
-  /*
-   * Stats must represent the complete
-   * organization, not just the current page.
-   */
   const stats = {
-    total: allRows.length,
+    total:
+      allRows.length,
+
     owners: 0,
+
     admins: 0,
+
     managers: 0,
+
     members: 0,
   };
 
   for (const row of allRows) {
-    switch (row.role.key) {
+    switch (
+      row.role.key
+    ) {
       case "OWNER":
         stats.owners += 1;
         break;
@@ -565,11 +745,25 @@ export async function getUsersDirectoryData(
     }
   }
 
-  /*
-   * Apply search before pagination.
-   */
   let filteredRows =
     allRows;
+
+  if (
+    input.roleId &&
+    input.roleId !==
+      "ALL"
+  ) {
+    filteredRows =
+      filteredRows.filter(
+        ({ role }) =>
+          String(
+            role.id,
+          ) ===
+          String(
+            input.roleId,
+          ),
+      );
+  }
 
   if (search) {
     const normalizedSearch =
@@ -580,12 +774,14 @@ export async function getUsersDirectoryData(
         ({ user }) => {
           const name =
             String(
-              user.name ?? "",
+              user.name ??
+                "",
             ).toLowerCase();
 
           const email =
             String(
-              user.email ?? "",
+              user.email ??
+                "",
             ).toLowerCase();
 
           return (
@@ -600,24 +796,24 @@ export async function getUsersDirectoryData(
       );
   }
 
-  /*
-   * Pagination is calculated after
-   * search filtering.
-   */
   const totalItems =
     filteredRows.length;
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(
-      totalItems / pageSize,
-    ),
-  );
+  const totalPages =
+    Math.max(
+      1,
 
-  const currentPage = Math.min(
-    requestedPage,
-    totalPages,
-  );
+      Math.ceil(
+        totalItems /
+          pageSize,
+      ),
+    );
+
+  const currentPage =
+    Math.min(
+      requestedPage,
+      totalPages,
+    );
 
   const offset =
     (currentPage - 1) *
@@ -626,14 +822,12 @@ export async function getUsersDirectoryData(
   const paginatedRows =
     filteredRows.slice(
       offset,
-      offset + pageSize,
+      offset +
+        pageSize,
     );
 
-  /*
-   * Convert database rows into the
-   * public UserListItem shape.
-   */
-  const users: UserListItem[] =
+  const users:
+    UserListItem[] =
     paginatedRows.map(
       ({
         membership,
@@ -695,9 +889,13 @@ export async function getUsersDirectoryData(
     users,
 
     pagination: {
-      page: currentPage,
+      page:
+        currentPage,
+
       pageSize,
+
       totalItems,
+
       totalPages,
     },
 
@@ -718,6 +916,7 @@ export async function getUserDetailData(
   const membership =
     await getMembership({
       userId,
+
       organizationId:
         actor.organization.id,
     });
@@ -736,13 +935,16 @@ export async function getUserDetailData(
           "name",
           "key",
         ],
+
         raw: true,
       },
     );
 
   if (
     !role ||
-    !isUserRoleKey(role.key)
+    !isUserRoleKey(
+      role.key,
+    )
   ) {
     throw new UserServiceError(
       "User role could not be resolved.",
@@ -756,9 +958,11 @@ export async function getUserDetailData(
         where: {
           roleId: role.id,
         },
+
         attributes: [
           "permissionId",
         ],
+
         raw: true,
       },
     );
@@ -776,6 +980,7 @@ export async function getUserDetailData(
             where: {
               id: permissionIds,
             },
+
             attributes: [
               "key",
               "name",
@@ -783,6 +988,7 @@ export async function getUserDetailData(
               "action",
               "description",
             ],
+
             raw: true,
           },
         )
@@ -791,12 +997,18 @@ export async function getUserDetailData(
   const permissions =
     permissionRows.map(
       (permission) => ({
-        key: permission.key,
-        name: permission.name,
+        key:
+          permission.key,
+
+        name:
+          permission.name,
+
         resource:
           permission.resource,
+
         action:
           permission.action,
+
         description:
           permission.description ??
           null,
@@ -806,9 +1018,13 @@ export async function getUserDetailData(
   const roles =
     await Role.findAll({
       where: {
-        isSystemRole: true,
-        key: SYSTEM_ROLE_KEYS,
+        isSystemRole:
+          true,
+
+        key:
+          SYSTEM_ROLE_KEYS,
       },
+
       attributes: [
         "id",
         "name",
@@ -816,24 +1032,35 @@ export async function getUserDetailData(
         "description",
         "isSystemRole",
       ],
+
       raw: true,
     });
 
   const normalizedRoles =
     roles
-      .filter((role) =>
-        isUserRoleKey(
-          role.key,
-        ),
+      .filter(
+        (role) =>
+          isUserRoleKey(
+            role.key,
+          ),
       )
       .map(
         (role) => ({
-          id: String(role.id),
-          key: role.key as UserRoleKey,
-          name: role.name,
+          id: String(
+            role.id,
+          ),
+
+          key:
+            role.key as UserRoleKey,
+
+          name: String(
+            role.name,
+          ),
+
           description:
             role.description ??
             null,
+
           isSystemRole:
             Boolean(
               role.isSystemRole,
@@ -843,14 +1070,23 @@ export async function getUserDetailData(
 
   return {
     user,
+
     organization: {
-      id: actor.organization.id,
-      name: actor.organization.name,
+      id:
+        actor.organization.id,
+
+      name:
+        actor.organization.name,
     },
+
     permissions,
-    roles: normalizedRoles,
+
+    roles:
+      normalizedRoles,
+
     allowedRoleKeys:
       SYSTEM_ROLE_KEYS.slice(),
+
     canUpdate:
       actor.permissions.includes(
         "USER_UPDATE",
@@ -861,6 +1097,7 @@ export async function getUserDetailData(
         actor.membership.role,
         user.roleKey,
       ),
+
     canDelete:
       actor.permissions.includes(
         "USER_DELETE",
@@ -871,8 +1108,10 @@ export async function getUserDetailData(
         actor.membership.role,
         user.roleKey,
       ),
+
     currentUserId:
       actor.user.id,
+
     currentRole:
       actor.membership.role,
   };
@@ -882,44 +1121,61 @@ async function getRolePermissions(
   roleId: string,
 ) {
   const rolePermissions =
-    await RolePermission.findAll({
-      where: {
-        roleId,
+    await RolePermission.findAll(
+      {
+        where: {
+          roleId,
+        },
+
+        attributes: [
+          "permissionId",
+        ],
+
+        raw: true,
       },
-      attributes: [
-        "permissionId",
-      ],
-      raw: true,
-    });
+    );
 
   const permissionIds =
     rolePermissions.map(
-      (item) => item.permissionId,
+      (item) =>
+        item.permissionId,
     );
 
   const permissionRows =
     permissionIds.length
-      ? await Permission.findAll({
-          where: {
-            id: permissionIds,
+      ? await Permission.findAll(
+          {
+            where: {
+              id: permissionIds,
+            },
+
+            attributes: [
+              "key",
+              "name",
+              "resource",
+              "action",
+              "description",
+            ],
+
+            raw: true,
           },
-          attributes: [
-            "key",
-            "name",
-            "resource",
-            "action",
-            "description",
-          ],
-          raw: true,
-        })
+        )
       : [];
 
   return permissionRows.map(
     (permission) => ({
-      key: permission.key,
-      name: permission.name,
-      resource: permission.resource,
-      action: permission.action,
+      key:
+        permission.key,
+
+      name:
+        permission.name,
+
+      resource:
+        permission.resource,
+
+      action:
+        permission.action,
+
       description:
         permission.description ??
         null,
@@ -937,49 +1193,195 @@ export async function updateOrganizationUserRole(
     );
 
   if (
-    userId === actor.user.id
+    userId ===
+    actor.user.id
   ) {
     throw new AuthorizationError(
       "You cannot change your own role.",
     );
   }
 
-  const targetMembership =
-    await getMembership(
-      {
+  const transaction =
+    await sequelize.transaction();
+
+  let committed =
+    false;
+
+  try {
+    const targetMembership =
+      await getMembership({
         userId,
-        organizationId: actor.organization.id,
+
+        organizationId:
+          actor.organization.id,
+
+        transaction,
+      });
+
+    const targetRole =
+      await getRoleById(
+        input.roleId,
+        transaction,
+      );
+
+    if (
+      !canAssignRole(
+        actor.membership.role,
+        targetRole.key as UserRoleKey,
+      )
+    ) {
+      throw new AuthorizationError(
+        "You do not have permission to assign this role.",
+      );
+    }
+
+    if (
+      targetRole.id ===
+      targetMembership.roleId
+    ) {
+      await transaction.rollback();
+
+      const user =
+        await toUserListItem(
+          targetMembership,
+        );
+
+      const permissions =
+        await getRolePermissions(
+          targetRole.id,
+        );
+
+      return {
+        user,
+        permissions,
+      };
+    }
+
+    const updated =
+      await OrganizationMembership.update(
+        {
+          roleId:
+            targetRole.id,
+        },
+        {
+          where: {
+            id:
+              targetMembership.id,
+
+            organizationId:
+              actor.organization.id,
+          },
+
+          transaction,
+        },
+      );
+
+    if (
+      updated[0] !== 1
+    ) {
+      throw new UserServiceError(
+        "The role could not be updated.",
+        500,
+      );
+    }
+
+    const notification =
+      await import(
+        "@/db/models/notification"
+      );
+
+    await notification.default.create(
+      {
+        id: randomUUID(),
+
+        userId,
+
+        organizationId:
+          actor.organization.id,
+
+        type:
+          "ROLE_CHANGED",
+
+        title:
+          "Your organization role changed",
+
+        message:
+          `Your role was changed to ${targetRole.name}.`,
+
+        metadata: {
+          roleId:
+            targetRole.id,
+
+          roleKey:
+            targetRole.key,
+
+          changedByUserId:
+            actor.user.id,
+        },
+
+        readAt: null,
+      },
+      {
+        transaction,
       },
     );
 
-  const targetRole =
-    await getRoleById(
-      input.roleId,
-    );
+    await createAuditLog({
+      action:
+        "USER_ROLE_CHANGED",
 
-  if (
-    !canAssignRole(
-      actor.membership.role,
-      targetRole.key as UserRoleKey,
-    )
-  ) {
-    throw new AuthorizationError(
-      "You do not have permission to assign this role.",
-    );
-  }
+      resource:
+        "USER",
 
-  /*
-   * Nothing changed.
-   * Still return the complete current
-   * state expected by the client.
-   */
-  if (
-    targetRole.id ===
-    targetMembership.roleId
-  ) {
+      resourceId:
+        userId,
+
+      targetUserId:
+        userId,
+
+      metadata: {
+        oldRoleId:
+          String(
+            targetMembership.roleId,
+          ),
+
+        oldRoleKey:
+          await getRoleKeyById(
+            String(
+              targetMembership.roleId,
+            ),
+            transaction,
+          ),
+
+        newRoleId:
+          String(
+            targetRole.id,
+          ),
+
+        newRoleKey:
+          String(
+            targetRole.key,
+          ),
+      },
+
+      transaction,
+    });
+
+    await transaction.commit();
+
+    committed = true;
+
+    const refreshed =
+      await getMembership({
+        userId,
+
+        organizationId:
+          actor.organization.id,
+      });
+
     const user =
       await toUserListItem(
-        targetMembership,
+        refreshed,
       );
 
     const permissions =
@@ -991,90 +1393,13 @@ export async function updateOrganizationUserRole(
       user,
       permissions,
     };
+  } catch (error) {
+    if (!committed) {
+      await transaction.rollback();
+    }
+
+    throw error;
   }
-
-  const updated =
-    await OrganizationMembership.update(
-      {
-        roleId:
-          targetRole.id,
-      },
-      {
-        where: {
-          id: targetMembership.id,
-          organizationId:
-            actor.organization.id,
-        },
-      },
-    );
-
-  if (
-    updated[0] !== 1
-  ) {
-    throw new UserServiceError(
-      "The role could not be updated.",
-      500,
-    );
-  }
-
-  const notification =
-    await import(
-      "@/db/models/notification"
-    );
-
-  await notification.default.create({
-    id: randomUUID(),
-    userId,
-
-    organizationId:
-      actor.organization.id,
-
-    type:
-      "ROLE_CHANGED",
-
-    title:
-      "Your organization role changed",
-
-    message:
-      `Your role was changed to ${targetRole.name}.`,
-
-    metadata: {
-      roleId:
-        targetRole.id,
-
-      roleKey:
-        targetRole.key,
-
-      changedByUserId:
-        actor.user.id,
-    },
-
-    readAt: null,
-  });
-
-
-  const refreshed =
-  await getMembership({
-    userId,
-    organizationId:
-      actor.organization.id,
-  });
-
-  const user =
-    await toUserListItem(
-      refreshed,
-    );
-
-
-  const permissions =
-    await getRolePermissions(
-      targetRole.id,
-    );
-
-  return {
-    user,
-    permissions,
-  };
 }
 
 export async function removeOrganizationUser(
@@ -1099,151 +1424,264 @@ export async function removeOrganizationUser(
     );
   }
 
-  if (!actor.organization?.id) {
+  if (
+    !actor.organization?.id
+  ) {
     throw new UserServiceError(
       "Organization could not be resolved.",
       400,
     );
   }
 
-  if (userId === actor.user.id) {
+  if (
+    userId ===
+    actor.user.id
+  ) {
     throw new AuthorizationError(
       "You cannot remove yourself from the organization.",
       403,
     );
   }
 
-  const membership =
-    await getMembership({
-      userId,
-      organizationId:
-        actor.organization.id,
-    });
+  const transaction =
+    await sequelize.transaction();
 
-  const targetUser =
-    await User.findByPk(userId, {
-      attributes: [
-        "id",
-        "name",
-        "email",
-      ],
-      raw: true,
-    });
+  try {
+    const membership =
+      await getMembership({
+        userId,
 
-  if (!targetUser) {
-    throw new UserServiceError(
-      "User no longer exists.",
-      404,
-    );
-  }
+        organizationId:
+          actor.organization.id,
 
-  const targetRole =
-    await Role.findByPk(
-      membership.roleId,
-      {
-        attributes: [
-          "id",
-          "key",
-        ],
-        raw: true,
-      },
-    );
-
-  if (
-    !targetRole ||
-    !isUserRoleKey(targetRole.key)
-  ) {
-    throw new UserServiceError(
-      "User role could not be resolved.",
-      500,
-    );
-  }
-
-  if (
-    !canAssignRole(
-      actor.membership.role,
-      targetRole.key,
-    )
-  ) {
-    throw new AuthorizationError(
-      "You do not have permission to remove this user.",
-      403,
-    );
-  }
-
-  if (
-    targetRole.key === "OWNER"
-  ) {
-    const ownerRole =
-      await Role.findOne({
-        where: {
-          key: "OWNER",
-          isSystemRole: true,
-        },
-        attributes: ["id"],
-        raw: true,
+        transaction,
       });
 
-    if (!ownerRole) {
+    const targetUser =
+      await User.findByPk(
+        userId,
+        {
+          attributes: [
+            "id",
+            "name",
+            "email",
+          ],
+
+          raw: true,
+
+          transaction,
+        },
+      );
+
+    if (!targetUser) {
       throw new UserServiceError(
-        "Owner role could not be resolved.",
+        "User no longer exists.",
+        404,
+      );
+    }
+
+    const targetRole =
+      await Role.findByPk(
+        membership.roleId,
+        {
+          attributes: [
+            "id",
+            "key",
+          ],
+
+          raw: true,
+
+          transaction,
+        },
+      );
+
+    if (
+      !targetRole ||
+      !isUserRoleKey(
+        targetRole.key,
+      )
+    ) {
+      throw new UserServiceError(
+        "User role could not be resolved.",
         500,
       );
     }
 
-    const ownerCount =
-      await OrganizationMembership.count({
-        where: {
-          organizationId:
-            actor.organization.id,
-          roleId:
-            ownerRole.id,
-        },
-      });
-
-    if (ownerCount <= 1) {
-      throw new UserServiceError(
-        "The organization must always have at least one owner.",
-        409,
+    if (
+      !canAssignRole(
+        actor.membership.role,
+        targetRole.key,
+      )
+    ) {
+      throw new AuthorizationError(
+        "You do not have permission to remove this user.",
       );
     }
-  }
 
-  const notification =
-    await import(
-      "@/db/models/notification"
+    if (
+      targetRole.key ===
+      "OWNER"
+    ) {
+      const ownerRole =
+        await Role.findOne(
+          {
+            where: {
+              key: "OWNER",
+
+              isSystemRole:
+                true,
+            },
+
+            attributes: [
+              "id",
+            ],
+
+            raw: true,
+
+            transaction,
+          },
+        );
+
+      if (!ownerRole) {
+        throw new UserServiceError(
+          "Owner role could not be resolved.",
+          500,
+        );
+      }
+
+      const ownerCount =
+        await OrganizationMembership.count(
+          {
+            where: {
+              organizationId:
+                actor.organization.id,
+
+              roleId:
+                ownerRole.id,
+            },
+
+            transaction,
+          },
+        );
+
+      if (
+        ownerCount <= 1
+      ) {
+        throw new UserServiceError(
+          "The organization must always have at least one owner.",
+          409,
+        );
+      }
+    }
+
+    const notification =
+      await import(
+        "@/db/models/notification"
+      );
+
+    await notification.default.create(
+      {
+        id: randomUUID(),
+
+        userId,
+
+        organizationId:
+          actor.organization.id,
+
+        type:
+          "REMOVED_FROM_ORGANIZATION",
+
+        title:
+          "You were removed from the organization",
+
+        message:
+          `You no longer have access to ${actor.organization.name}.`,
+
+        metadata: {
+          removedByUserId:
+            actor.user.id,
+
+          organizationId:
+            actor.organization.id,
+        },
+
+        readAt: null,
+      },
+      {
+        transaction,
+      },
     );
 
-  await notification.default.create({
-    id: randomUUID(),
-    userId,
-    organizationId:
-      actor.organization.id,
-    type:
-      "REMOVED_FROM_ORGANIZATION",
-    title:
-      "You were removed from the organization",
-    message:
-      `You no longer have access to ${actor.organization.name}.`,
-    metadata: {
-      removedByUserId:
-        actor.user.id,
-      organizationId:
-        actor.organization.id,
-    },
-    readAt: null,
-  });
+    await createAuditLog({
+      action:
+        "USER_REMOVED",
 
-  await OrganizationMembership.destroy({
-    where: {
-      id: membership.id,
-      organizationId:
-        actor.organization.id,
-    },
-  });
+      resource:
+        "USER",
 
-  return {
-    success: true,
-    userId,
-  };
+      resourceId:
+        userId,
+
+      targetUserId:
+        userId,
+
+      metadata: {
+        removedRoleId:
+          String(
+            targetRole.id,
+          ),
+
+        removedRoleKey:
+          targetRole.key,
+
+        removedUserName:
+          String(
+            targetUser.name,
+          ),
+
+        removedUserEmail:
+          String(
+            targetUser.email,
+          ),
+      },
+
+      transaction,
+    });
+
+    const destroyed =
+      await OrganizationMembership.destroy(
+        {
+          where: {
+            id:
+              membership.id,
+
+            organizationId:
+              actor.organization.id,
+          },
+
+          transaction,
+        },
+      );
+
+    if (
+      destroyed !== 1
+    ) {
+      throw new UserServiceError(
+        "The user could not be removed.",
+        500,
+      );
+    }
+
+    await transaction.commit();
+
+    return {
+      success: true,
+
+      userId,
+    };
+  } catch (error) {
+    await transaction.rollback();
+
+    throw error;
+  }
 }
