@@ -1,10 +1,5 @@
 import { create } from "zustand";
-
-import type {
-  InvitationListItem,
-  InvitationPageData,
-  InvitationStats,
-} from "@/lib/invitations/types";
+import type { InvitationListItem, InvitationPageData, InvitationStats } from "@/lib/invitations/types";
 
 type State = {
   data: InvitationPageData | null;
@@ -15,40 +10,31 @@ type State = {
   setError: (error: string | null) => void;
   add: (invitation: InvitationListItem) => void;
   update: (invitation: InvitationListItem) => void;
-  remove: (id: string) => void;
   reset: () => void;
 };
 
-function calculateStats(items: InvitationListItem[]): InvitationStats {
-  return items.reduce(
-    (stats, item) => {
-      stats.total += 1;
-      stats[item.status.toLowerCase() as "pending" | "accepted" | "expired" | "revoked"] += 1;
-      return stats;
-    },
-    { total: 0, pending: 0, accepted: 0, expired: 0, revoked: 0 },
-  );
+type StatusKey = "pending" | "accepted" | "expired" | "revoked";
+
+function changeStats(stats: InvitationStats, status: InvitationListItem["status"], amount: 1 | -1) {
+  const key = status.toLowerCase() as StatusKey;
+  return { ...stats, [key]: Math.max(0, stats[key] + amount) };
 }
 
 export const useInvitationStore = create<State>((set) => ({
   data: null,
   loading: false,
   error: null,
-
   setData: (data) => set({ data, error: null }),
   setLoading: (loading) => set({ loading }),
   setError: (error) => set({ error }),
 
   add: (invitation) => set((state) => {
     if (!state.data) return state;
-    const invitations = [invitation, ...state.data.invitations];
     return {
       data: {
         ...state.data,
-        invitations,
-        stats: state.data.pagination.totalItems === invitations.length
-          ? calculateStats(invitations)
-          : state.data.stats,
+        invitations: [invitation, ...state.data.invitations],
+        stats: { ...changeStats(state.data.stats, invitation.status, 1), total: state.data.stats.total + 1 },
         pagination: {
           ...state.data.pagination,
           totalItems: state.data.pagination.totalItems + 1,
@@ -60,31 +46,14 @@ export const useInvitationStore = create<State>((set) => ({
 
   update: (invitation) => set((state) => {
     if (!state.data) return state;
-    const invitations = state.data.invitations.map((item) => item.id === invitation.id ? invitation : item);
-    return {
-      data: {
-        ...state.data,
-        invitations,
-        stats: state.data.pagination.totalItems === invitations.length ? calculateStats(invitations) : state.data.stats,
-      },
-    };
-  }),
-
-  remove: (id) => set((state) => {
-    if (!state.data) return state;
-    const invitations = state.data.invitations.filter((item) => item.id !== id);
-    return {
-      data: {
-        ...state.data,
-        invitations,
-        pagination: {
-          ...state.data.pagination,
-          totalItems: Math.max(0, state.data.pagination.totalItems - 1),
-          totalPages: Math.max(1, Math.ceil(Math.max(0, state.data.pagination.totalItems - 1) / state.data.pagination.pageSize)),
-        },
-        stats: state.data.pagination.totalItems === invitations.length + 1 ? calculateStats(invitations) : state.data.stats,
-      },
-    };
+    const old = state.data.invitations.find((item) => item.id === invitation.id);
+    if (!old) return state;
+    let stats = state.data.stats;
+    if (old.status !== invitation.status) {
+      stats = changeStats(stats, old.status, -1);
+      stats = changeStats(stats, invitation.status, 1);
+    }
+    return { data: { ...state.data, invitations: state.data.invitations.map((item) => item.id === invitation.id ? invitation : item), stats } };
   }),
 
   reset: () => set({ data: null, loading: false, error: null }),
