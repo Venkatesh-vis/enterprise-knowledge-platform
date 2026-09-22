@@ -2,330 +2,92 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
-
-import {
-  isAxiosError,
-} from "axios";
-
-import {
-  useForm,
-} from "react-hook-form";
-
-import {
-  zodResolver,
-} from "@hookform/resolvers/zod";
-
+import { isAxiosError } from "axios";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
 import { Button } from "@/app/shared/ui/button";
-import {
-  FieldError,
-} from "@/app/shared/ui/field-error";
+import { FieldError } from "@/app/shared/ui/field-error";
 import { Input } from "@/app/shared/ui/input";
 import { Label } from "@/app/shared/ui/label";
-import {
-  SocialButton,
-} from "@/app/shared/ui/social-button";
+import { SocialButton } from "@/app/shared/ui/social-button";
+import { apiRequest } from "@/app/shared/lib/api";
 
-import {
-  apiRequest,
-} from "@/app/shared/lib/api";
+const loginSchema = z.object({
+  email: z.string().trim().email("Enter a valid email address."),
+  password: z.string().min(1, "Password is required."),
+});
 
-const loginSchema =
-  z.object({
-    email: z
-      .string()
-      .trim()
-      .email(
-        "Enter a valid email address.",
-      ),
+type LoginFormValues = z.infer<typeof loginSchema>;
 
-    password: z
-      .string()
-      .min(
-        1,
-        "Password is required.",
-      ),
-  });
-
-type LoginFormValues =
-  z.infer<typeof loginSchema>;
-
-type LoginResponse = {
-  success: boolean;
-  message: string;
-};
+type LoginResponse = { success: boolean; message: string };
 
 export function LoginForm() {
-  const router =
-    useRouter();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const invitationToken = searchParams.get("invitation");
+  const [serverError, setServerError] = useState<string | null>(null);
 
-  const [
-    serverError,
-    setServerError,
-  ] = useState<
-    string | null
-  >(null);
+  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: "", password: "" },
+    mode: "onBlur",
+  });
 
-  const {
-    register,
-    handleSubmit,
-    formState: {
-      errors,
-      isSubmitting,
-    },
-  } =
-    useForm<LoginFormValues>({
-      resolver:
-        zodResolver(
-          loginSchema,
-        ),
-
-      defaultValues: {
-        email: "",
-        password: "",
-      },
-
-      mode: "onBlur",
-    });
-
-  async function onSubmit(
-    values: LoginFormValues,
-  ) {
+  async function onSubmit(values: LoginFormValues) {
     setServerError(null);
-
     try {
-      const response =
-        await apiRequest<LoginResponse>(
-          {
-            path:
-              "/api/auth/login",
-            method: "POST",
-            body: values,
-          },
-        );
-
+      const response = await apiRequest<LoginResponse>({ path: "/api/auth/login", method: "POST", body: values });
       if (!response.success) {
-        setServerError(
-          response.message ||
-            "Unable to sign in.",
-        );
-
+        setServerError(response.message || "Unable to sign in.");
         return;
       }
 
-      router.replace(
-        "/dashboard",
-      );
+      if (invitationToken) {
+        try {
+          await apiRequest({ path: "/api/invitations/accept", method: "POST", body: { mode: "existing", token: invitationToken } });
+        } catch (error) {
+          setServerError(isAxiosError(error) ? error.response?.data?.message ?? "Unable to accept the invitation." : "Unable to accept the invitation.");
+          return;
+        }
+      }
 
+      router.replace("/dashboard");
       router.refresh();
     } catch (error) {
-      if (
-        isAxiosError(error)
-      ) {
-        setServerError(
-          error.response
-            ?.data?.message ??
-            "Unable to sign in. Please try again.",
-        );
-
-        return;
-      }
-
-      setServerError(
-        "Unable to connect to the server. Please try again.",
-      );
+      setServerError(isAxiosError(error) ? error.response?.data?.message ?? "Unable to sign in. Please try again." : "Unable to connect to the server. Please try again.");
     }
   }
 
   function handleGoogleSignIn() {
-    setServerError(
-      "Google sign-in is not available yet.",
-    );
+    setServerError("Google sign-in is not available yet.");
   }
 
   return (
-    <section
-      aria-labelledby="login-title"
-      className="w-full max-w-md"
-    >
+    <section aria-labelledby="login-title" className="w-full max-w-md">
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-900/5 sm:p-8">
         <div className="text-center">
-          <div
-            aria-hidden="true"
-            className="mx-auto flex h-11 w-11 items-center justify-center"
-          >
-            <Image
-              src="/icon.svg"
-              alt=""
-              width={44}
-              height={44}
-              className="h-11 w-11 object-contain"
-            />
-          </div>
-
-          <h1
-            id="login-title"
-            className="mt-5 text-2xl font-semibold tracking-tight text-slate-950"
-          >
-            Welcome back
-          </h1>
-
-          <p className="mt-2 text-sm leading-6 text-slate-500">
-            Sign in to continue to your knowledge workspace.
-          </p>
+          <div aria-hidden="true" className="mx-auto flex h-11 w-11 items-center justify-center"><Image src="/icon.svg" alt="" width={44} height={44} className="h-11 w-11 object-contain" /></div>
+          <h1 id="login-title" className="mt-5 text-2xl font-semibold tracking-tight text-slate-950">Welcome back</h1>
+          <p className="mt-2 text-sm leading-6 text-slate-500">Sign in to continue to your knowledge workspace.</p>
         </div>
 
-        {serverError && (
-          <div
-            role="alert"
-            aria-live="polite"
-            className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
-          >
-            {serverError}
-          </div>
-        )}
+        {invitationToken && <div className="mt-6 rounded-lg border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm text-indigo-800">After sign in, this invitation will be accepted automatically.</div>}
+        {serverError && <div role="alert" aria-live="polite" className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{serverError}</div>}
 
-        <div className="mt-8">
-          <SocialButton
-            provider="google"
-            onClick={
-              handleGoogleSignIn
-            }
-            disabled={
-              isSubmitting
-            }
-          />
-        </div>
+        <div className="mt-8"><SocialButton provider="google" onClick={handleGoogleSignIn} disabled={isSubmitting} /></div>
+        <div aria-hidden="true" className="my-6 flex items-center gap-4"><div className="h-px flex-1 bg-slate-200" /><span className="shrink-0 text-xs font-medium uppercase tracking-wider text-slate-400">Or continue with email</span><div className="h-px flex-1 bg-slate-200" /></div>
 
-        <div
-          aria-hidden="true"
-          className="my-6 flex items-center gap-4"
-        >
-          <div className="h-px flex-1 bg-slate-200" />
-
-          <span className="shrink-0 text-xs font-medium uppercase tracking-wider text-slate-400">
-            Or continue with email
-          </span>
-
-          <div className="h-px flex-1 bg-slate-200" />
-        </div>
-
-        <form
-          onSubmit={handleSubmit(
-            onSubmit,
-          )}
-          noValidate
-          className="space-y-5"
-        >
-          <div>
-            <Label
-              htmlFor="login-email"
-              required
-            >
-              Work email
-            </Label>
-
-            <Input
-              id="login-email"
-              type="email"
-              autoComplete="email"
-              placeholder="you@company.com"
-              disabled={
-                isSubmitting
-              }
-              {...register(
-                "email",
-              )}
-              error={
-                !!errors.email
-              }
-              aria-describedby={
-                errors.email
-                  ? "login-email-error"
-                  : undefined
-              }
-            />
-
-            <FieldError
-              id="login-email-error"
-              message={
-                errors.email
-                  ?.message
-              }
-            />
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between gap-4">
-              <Label
-                htmlFor="login-password"
-                required
-              >
-                Password
-              </Label>
-
-              <span className="shrink-0 text-xs text-slate-400">
-                Password recovery coming soon
-              </span>
-            </div>
-
-            <Input
-              id="login-password"
-              type="password"
-              autoComplete="current-password"
-              placeholder="Enter your password"
-              disabled={
-                isSubmitting
-              }
-              {...register(
-                "password",
-              )}
-              error={
-                !!errors.password
-              }
-              aria-describedby={
-                errors.password
-                  ? "login-password-error"
-                  : undefined
-              }
-            />
-
-            <FieldError
-              id="login-password-error"
-              message={
-                errors.password
-                  ?.message
-              }
-            />
-          </div>
-
-          <Button
-            type="submit"
-            disabled={
-              isSubmitting
-            }
-            className="w-full cursor-pointer"
-          >
-            {isSubmitting
-              ? "Signing in..."
-              : "Sign in"}
-          </Button>
+        <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
+          <div><Label htmlFor="login-email" required>Work email</Label><Input id="login-email" type="email" autoComplete="email" placeholder="you@company.com" disabled={isSubmitting} {...register("email")} error={!!errors.email} /><FieldError id="login-email-error" message={errors.email?.message} /></div>
+          <div><div className="flex items-center justify-between gap-4"><Label htmlFor="login-password" required>Password</Label><span className="shrink-0 text-xs text-slate-400">Password recovery coming soon</span></div><Input id="login-password" type="password" autoComplete="current-password" placeholder="Enter your password" disabled={isSubmitting} {...register("password")} error={!!errors.password} /><FieldError id="login-password-error" message={errors.password?.message} /></div>
+          <Button type="submit" disabled={isSubmitting} className="w-full">{isSubmitting ? "Signing in..." : invitationToken ? "Sign in & accept invitation" : "Sign in"}</Button>
         </form>
 
-        <div className="mt-6 border-t border-slate-100 pt-6 text-center">
-          <p className="text-sm text-slate-500">
-            Don&apos;t have an account?{" "}
-            <Link
-              href="/register"
-              className="font-medium text-indigo-600 hover:text-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30"
-            >
-              Create an account
-            </Link>
-          </p>
-        </div>
+        <p className="mt-6 text-center text-sm text-slate-500">Need an account? <Link href="/register" className="font-medium text-slate-900 hover:underline">Create one</Link></p>
       </div>
     </section>
   );
