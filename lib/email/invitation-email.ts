@@ -23,18 +23,25 @@ export async function sendInvitationEmail(input: {
   organizationName: string;
   roleName: string;
   token: string;
+  inviterName: string;
+  inviterEmail: string;
 }) {
   const url = invitationUrl(input.token);
   const safeName = escapeHtml(input.name);
   const safeOrganization = escapeHtml(input.organizationName);
   const safeRole = escapeHtml(input.roleName);
+  const safeInviter = escapeHtml(input.inviterName);
   const safeUrl = escapeHtml(url);
 
   await sendMailjetEmail({
     toEmail: input.email,
     toName: input.name,
+    fromEmail: input.inviterEmail,
+    fromName: input.inviterName,
+    replyToEmail: input.inviterEmail,
+    replyToName: input.inviterName,
     subject: `You're invited to join ${input.organizationName}`,
-    text: `Hi ${input.name},\n\n${input.organizationName} invited you to join its workspace as ${input.roleName}.\n\nAccept your invitation:\n${url}\n\nThis invitation expires in 7 days.`,
-    html: `<!doctype html><html><body style="font-family:Arial,sans-serif;background:#f8fafc;padding:32px"><div style="max-width:600px;margin:auto;background:#fff;padding:32px;border-radius:16px;border:1px solid #e2e8f0"><h1>You're invited</h1><p>Hi ${safeName}, ${safeOrganization} invited you to join its workspace.</p><p>Assigned role: <strong>${safeRole}</strong></p><p><a href="${safeUrl}" style="display:inline-block;padding:12px 18px;background:#0f172a;color:#fff;border-radius:8px;text-decoration:none">Accept invitation</a></p><p style="color:#64748b;font-size:12px">This invitation expires in 7 days.</p></div></body></html>`,
+    text: `Hi ${input.name},\n\n${input.inviterName} invited you to join ${input.organizationName} as ${input.roleName}.\n\nAccept your invitation:\n${url}\n\nThis invitation expires in 7 days.`,
+    html: `<!doctype html><html><body style="font-family:Arial,sans-serif;background:#f8fafc;padding:32px"><div style="max-width:600px;margin:auto;background:#fff;padding:32px;border-radius:16px;border:1px solid #e2e8f0"><h1>You're invited</h1><p>Hi ${safeName}, ${safeInviter} invited you to join ${safeOrganization}.</p><p>Assigned role: <strong>${safeRole}</strong></p><p><a href="${safeUrl}" style="display:inline-block;padding:12px 18px;background:#0f172a;color:#fff;border-radius:8px;text-decoration:none">Accept invitation</a></p><p style="color:#64748b;font-size:12px">This invitation expires in 7 days.</p></div></body></html>`,
   });
 }
