@@ -37,10 +37,7 @@ import type {
 export class InvitationServiceError extends Error {
   status: number;
 
-  constructor(
-    message: string,
-    status = 400,
-  ) {
+  constructor(message: string, status = 400) {
     super(message);
     this.name = "InvitationServiceError";
     this.status = status;
@@ -54,31 +51,18 @@ function normalizeEmail(email: string) {
 function assertRole(
   roleKey: string,
 ): asserts roleKey is InvitationRoleKey {
-  if (
-    !INVITATION_ROLE_KEYS.includes(
-      roleKey as InvitationRoleKey,
-    )
-  ) {
-    throw new InvitationServiceError(
-      "Invalid invitation role.",
-    );
+  if (!INVITATION_ROLE_KEYS.includes(roleKey as InvitationRoleKey)) {
+    throw new InvitationServiceError("Invalid invitation role.");
   }
 }
 
 async function getRole(
   roleKey: InvitationRoleKey,
-  transaction?: Transaction,
 ) {
   return Role.findOne({
     where: { key: roleKey },
-    attributes: [
-      "id",
-      "key",
-      "name",
-      "description",
-    ],
+    attributes: ["id", "key", "name", "description"],
     raw: true,
-    transaction,
   });
 }
 
@@ -88,14 +72,10 @@ async function expireIfNeeded(
 ) {
   if (
     invitation.status === "PENDING" &&
-    new Date(invitation.expiresAt).getTime() <=
-      Date.now()
+    new Date(invitation.expiresAt).getTime() <= Date.now()
   ) {
     await invitation.update(
-      {
-        status: "EXPIRED",
-        activeKey: null,
-      },
+      { status: "EXPIRED", activeKey: null },
       { transaction },
     );
     return "EXPIRED";
@@ -104,9 +84,7 @@ async function expireIfNeeded(
   return invitation.status;
 }
 
-function serializeInvitation(
-  row: any,
-): InvitationListItem {
+function serializeInvitation(row: any): InvitationListItem {
   const roleKey = String(
     row.role?.key ?? "MEMBER",
   ) as InvitationRoleKey;
@@ -119,21 +97,11 @@ function serializeInvitation(
     roleName: String(
       row.role?.name ?? ROLE_LABELS[roleKey],
     ),
-    status: String(
-      row.status,
-    ) as InvitationStatus,
-    createdAt: new Date(
-      row.createdAt,
-    ).toISOString(),
-    expiresAt: new Date(
-      row.expiresAt,
-    ).toISOString(),
-    lastSentAt: new Date(
-      row.lastSentAt,
-    ).toISOString(),
-    invitedByName: String(
-      row.invitedBy?.name ?? "Unknown",
-    ),
+    status: String(row.status) as InvitationStatus,
+    createdAt: new Date(row.createdAt).toISOString(),
+    expiresAt: new Date(row.expiresAt).toISOString(),
+    lastSentAt: new Date(row.lastSentAt).toISOString(),
+    invitedByName: String(row.invitedBy?.name ?? "Unknown"),
     sendCount: Number(row.sendCount ?? 0),
   };
 }
@@ -193,29 +161,18 @@ export async function getInvitationPageData({
   page?: number;
   pageSize?: number;
 } = {}): Promise<InvitationPageData> {
-  const auth = await requirePermission(
-    "INVITATION_READ",
-  );
-
-  const safePage = Math.max(
-    1,
-    Number(page) || 1,
-  );
+  const auth = await requirePermission("INVITATION_READ");
+  const safePage = Math.max(1, Number(page) || 1);
   const safePageSize = Math.min(
     100,
     Math.max(1, Number(pageSize) || 20),
   );
-  const normalizedQuery = query
-    .trim()
-    .slice(0, 100);
-
+  const normalizedQuery = query.trim().slice(0, 100);
   const where: any = {
     organizationId: auth.organization.id,
   };
 
-  if (status !== "ALL") {
-    where.status = status;
-  }
+  if (status !== "ALL") where.status = status;
 
   if (role !== "ALL") {
     assertRole(role);
@@ -232,59 +189,43 @@ export async function getInvitationPageData({
 
   if (normalizedQuery) {
     where[Op.or] = [
-      {
-        email: {
-          [Op.like]: `%${normalizedQuery}%`,
-        },
-      },
-      {
-        name: {
-          [Op.like]: `%${normalizedQuery}%`,
-        },
-      },
+      { email: { [Op.like]: `%${normalizedQuery}%` } },
+      { name: { [Op.like]: `%${normalizedQuery}%` } },
     ];
   }
 
   await Invitation.update(
-    {
-      status: "EXPIRED",
-      activeKey: null,
-    },
+    { status: "EXPIRED", activeKey: null },
     {
       where: {
         organizationId: auth.organization.id,
         status: "PENDING",
-        expiresAt: {
-          [Op.lte]: new Date(),
-        },
+        expiresAt: { [Op.lte]: new Date() },
       },
     },
   );
 
-  const { count, rows } =
-    await Invitation.findAndCountAll({
-      where,
-      include: [
-        {
-          model: Role,
-          as: "role",
-          attributes: ["key", "name"],
-        },
-        {
-          model: User,
-          as: "invitedBy",
-          attributes: ["name"],
-        },
-      ],
-      order: [["createdAt", "DESC"]],
-      offset: (safePage - 1) * safePageSize,
-      limit: safePageSize,
-    });
+  const { count, rows } = await Invitation.findAndCountAll({
+    where,
+    include: [
+      {
+        model: Role,
+        as: "role",
+        attributes: ["key", "name"],
+      },
+      {
+        model: User,
+        as: "invitedBy",
+        attributes: ["name"],
+      },
+    ],
+    order: [["createdAt", "DESC"]],
+    offset: (safePage - 1) * safePageSize,
+    limit: safePageSize,
+  });
 
   const all = await Invitation.findAll({
-    where: {
-      organizationId: auth.organization.id,
-    },
+    where: { organizationId: auth.organization.id },
     attributes: ["status"],
     raw: true,
   });
@@ -310,13 +251,10 @@ export async function getInvitationPageData({
     raw: true,
   });
 
-  const allowedRoleKeys =
-    INVITATION_ROLE_KEYS.filter((key) =>
-      canAssignRole(
-        auth.membership.role,
-        key,
-      ),
-    );
+  const allowedRoleKeys = INVITATION_ROLE_KEYS.filter(
+    (key) =>
+      canAssignRole(auth.membership.role, key),
+  );
 
   return {
     organization: auth.organization,
@@ -329,9 +267,7 @@ export async function getInvitationPageData({
       totalItems: Number(count),
       totalPages: Math.max(
         1,
-        Math.ceil(
-          Number(count) / safePageSize,
-        ),
+        Math.ceil(Number(count) / safePageSize),
       ),
     },
     filters: {
@@ -345,45 +281,24 @@ export async function getInvitationPageData({
       description: item.description ?? "",
     })),
     allowedRoleKeys,
-    currentRole:
-      auth.membership.role as InvitationRoleKey,
+    currentRole: auth.membership.role as InvitationRoleKey,
     permissions: {
-      canRead:
-        auth.permissions.includes(
-          "INVITATION_READ",
-        ),
-      canCreate:
-        auth.permissions.includes(
-          "INVITATION_CREATE",
-        ),
-      canImport:
-        auth.permissions.includes(
-          "INVITATION_IMPORT",
-        ),
-      canResend:
-        auth.permissions.includes(
-          "INVITATION_RESEND",
-        ),
-      canRevoke:
-        auth.permissions.includes(
-          "INVITATION_REVOKE",
-        ),
+      canRead: auth.permissions.includes("INVITATION_READ"),
+      canCreate: auth.permissions.includes("INVITATION_CREATE"),
+      canImport: auth.permissions.includes("INVITATION_IMPORT"),
+      canResend: auth.permissions.includes("INVITATION_RESEND"),
+      canRevoke: auth.permissions.includes("INVITATION_REVOKE"),
     },
   };
 }
 
-async function validateCreate(
-  input: CreateInvitationInput,
-) {
+async function validateCreate(input: CreateInvitationInput) {
   const email = normalizeEmail(input.email);
   const name = input.name.trim();
 
   assertRole(input.roleKey);
 
-  if (
-    name.length < 2 ||
-    name.length > 100
-  ) {
+  if (name.length < 2 || name.length > 100) {
     throw new InvitationServiceError(
       "Name must be between 2 and 100 characters.",
     );
@@ -398,16 +313,9 @@ async function validateCreate(
     );
   }
 
-  const auth = await requirePermission(
-    "INVITATION_CREATE",
-  );
+  const auth = await requirePermission("INVITATION_CREATE");
 
-  if (
-    !canAssignRole(
-      auth.membership.role,
-      input.roleKey,
-    )
-  ) {
+  if (!canAssignRole(auth.membership.role, input.roleKey)) {
     throw new InvitationServiceError(
       "You are not allowed to assign this role.",
       403,
@@ -439,23 +347,21 @@ async function validateCreate(
     );
   }
 
-  const active =
-    await Invitation.findOne({
-      where: {
-        activeKey:
-          createInvitationActiveKey(
-            auth.organization.id,
-            email,
-          ),
-      },
-    });
+  const activeKey = createInvitationActiveKey(
+    auth.organization.id,
+    email,
+  );
+  const active = await Invitation.findOne({
+    where: { activeKey },
+  });
 
   if (active) {
-    if (
+    const expired =
       active.status === "PENDING" &&
       new Date(active.expiresAt).getTime() <=
-        Date.now()
-    ) {
+        Date.now();
+
+    if (expired) {
       await active.update({
         status: "EXPIRED",
         activeKey: null,
@@ -468,52 +374,34 @@ async function validateCreate(
     }
   }
 
-  return {
-    auth,
-    email,
-    name,
-    role,
-  };
+  return { auth, email, name, role };
 }
 
 export async function createInvitation(
   input: CreateInvitationInput,
 ) {
-  const {
-    auth,
+  const { auth, email, name, role } =
+    await validateCreate(input);
+  const { token, tokenHash } =
+    createInvitationToken();
+  const now = new Date();
+  const invitation = await Invitation.create({
+    id: randomUUID(),
+    organizationId: auth.organization.id,
+    invitedByUserId: auth.user.id,
+    roleId: role.id,
     email,
     name,
-    role,
-  } = await validateCreate(input);
-
-  const {
-    token,
     tokenHash,
-  } = createInvitationToken();
-  const now = new Date();
-
-  const invitation =
-    await Invitation.create({
-      id: randomUUID(),
-      organizationId:
-        auth.organization.id,
-      invitedByUserId:
-        auth.user.id,
-      roleId: role.id,
+    activeKey: createInvitationActiveKey(
+      auth.organization.id,
       email,
-      name,
-      tokenHash,
-      activeKey:
-        createInvitationActiveKey(
-          auth.organization.id,
-          email,
-        ),
-      status: "PENDING",
-      expiresAt:
-        createInvitationExpiry(now),
-      lastSentAt: now,
-      sendCount: 1,
-    });
+    ),
+    status: "PENDING",
+    expiresAt: createInvitationExpiry(now),
+    lastSentAt: now,
+    sendCount: 1,
+  });
 
   let emailSent = true;
 
@@ -521,28 +409,20 @@ export async function createInvitation(
     await sendInvitationEmail({
       email,
       name,
-      organizationName:
-        auth.organization.name,
+      organizationName: auth.organization.name,
       roleName: role.name,
       token,
     });
   } catch (error) {
     emailSent = false;
-    console.error(
-      "Invitation email failed:",
-      error,
-    );
+    console.error("Invitation email failed:", error);
   }
 
   await createAuditLog({
     action: "INVITATION_CREATED",
     resource: "INVITATION",
     resourceId: invitation.id,
-    metadata: {
-      email,
-      roleKey: input.roleKey,
-      emailSent,
-    },
+    metadata: { email, roleKey: input.roleKey, emailSent },
   });
 
   return {
@@ -555,27 +435,15 @@ export async function createInvitation(
   };
 }
 
-export async function resendInvitation(
-  id: string,
-) {
-  const auth = await requirePermission(
-    "INVITATION_RESEND",
+export async function resendInvitation(id: string) {
+  const auth = await requirePermission("INVITATION_RESEND");
+  const invitation: any = await getInvitationById(
+    id,
+    auth.organization.id,
   );
-  const invitation: any =
-    await getInvitationById(
-      id,
-      auth.organization.id,
-    );
+  const status = await expireIfNeeded(invitation);
 
-  const status = await expireIfNeeded(
-    invitation,
-  );
-
-  if (
-    !["PENDING", "EXPIRED"].includes(
-      status,
-    )
-  ) {
+  if (!["PENDING", "EXPIRED"].includes(status)) {
     throw new InvitationServiceError(
       "Only pending or expired invitations can be resent.",
       409,
@@ -586,9 +454,7 @@ export async function resendInvitation(
     INVITATION_RESEND_COOLDOWN_SECONDS -
     Math.floor(
       (Date.now() -
-        new Date(
-          invitation.lastSentAt,
-        ).getTime()) /
+        new Date(invitation.lastSentAt).getTime()) /
         1000,
     );
 
@@ -599,30 +465,27 @@ export async function resendInvitation(
     );
   }
 
-  const {
-    token,
-    tokenHash,
-  } = createInvitationToken();
+  const { token, tokenHash } = createInvitationToken();
   const now = new Date();
 
   await invitation.update({
     tokenHash,
-    activeKey:
-      createInvitationActiveKey(
-        auth.organization.id,
-        invitation.email,
-      ),
+    activeKey: createInvitationActiveKey(
+      auth.organization.id,
+      invitation.email,
+    ),
     status: "PENDING",
-    expiresAt:
-      createInvitationExpiry(now),
+    expiresAt: createInvitationExpiry(now),
     lastSentAt: now,
-    sendCount:
-      Number(invitation.sendCount) + 1,
+    sendCount: Number(invitation.sendCount) + 1,
   });
 
-  const role: any = await getRole(
-    String(invitation.roleId) as InvitationRoleKey,
-  );
+  const role: any = await Role.findByPk(
+    invitation.roleId,
+    {
+      attributes: ["id", "key", "name"],
+      raw: true,
+  });
 
   let emailSent = true;
 
@@ -630,18 +493,13 @@ export async function resendInvitation(
     await sendInvitationEmail({
       email: invitation.email,
       name: invitation.name,
-      organizationName:
-        auth.organization.name,
-      roleName:
-        role?.name ?? "Member",
+      organizationName: auth.organization.name,
+      roleName: role?.name ?? "Member",
       token,
     });
   } catch (error) {
     emailSent = false;
-    console.error(
-      "Invitation resend failed:",
-      error,
-    );
+    console.error("Invitation resend failed:", error);
   }
 
   await createAuditLog({
@@ -651,31 +509,23 @@ export async function resendInvitation(
     metadata: { emailSent },
   });
 
-  const fresh: any =
-    await getInvitationById(
-      id,
-      auth.organization.id,
-    );
+  const fresh: any = await getInvitationById(
+    id,
+    auth.organization.id,
+  );
 
   return {
-    invitation: serializeInvitation(
-      fresh,
-    ),
+    invitation: serializeInvitation(fresh),
     emailSent,
   };
 }
 
-export async function revokeInvitation(
-  id: string,
-) {
-  const auth = await requirePermission(
-    "INVITATION_REVOKE",
+export async function revokeInvitation(id: string) {
+  const auth = await requirePermission("INVITATION_REVOKE");
+  const invitation: any = await getInvitationById(
+    id,
+    auth.organization.id,
   );
-  const invitation: any =
-    await getInvitationById(
-      id,
-      auth.organization.id,
-    );
 
   await expireIfNeeded(invitation);
 
@@ -699,37 +549,25 @@ export async function revokeInvitation(
   });
 
   return {
-    invitation: serializeInvitation(
-      invitation,
-    ),
+    invitation: serializeInvitation(invitation),
   };
 }
 
-export async function getInvitationDetail(
-  id: string,
-) {
-  const auth = await requirePermission(
-    "INVITATION_READ",
+export async function getInvitationDetail(id: string) {
+  const auth = await requirePermission("INVITATION_READ");
+  const row: any = await getInvitationById(
+    id,
+    auth.organization.id,
   );
-  const row: any =
-    await getInvitationById(
-      id,
-      auth.organization.id,
-    );
 
   return {
     ...serializeInvitation(row),
-    organizationName:
-      auth.organization.name,
+    organizationName: auth.organization.name,
     acceptedAt: row.acceptedAt
-      ? new Date(
-          row.acceptedAt,
-        ).toISOString()
+      ? new Date(row.acceptedAt).toISOString()
       : null,
     revokedAt: row.revokedAt
-      ? new Date(
-          row.revokedAt,
-        ).toISOString()
+      ? new Date(row.revokedAt).toISOString()
       : null,
   } as InvitationDetail;
 }
@@ -737,25 +575,23 @@ export async function getInvitationDetail(
 export async function getPublicInvitation(
   token: string,
 ): Promise<PublicInvitationData> {
-  const row: any =
-    await Invitation.findOne({
-      where: {
-        tokenHash:
-          hashInvitationToken(token),
+  const row: any = await Invitation.findOne({
+    where: {
+      tokenHash: hashInvitationToken(token),
+    },
+    include: [
+      {
+        model: Role,
+        as: "role",
+        attributes: ["key", "name"],
       },
-      include: [
-        {
-          model: Role,
-          as: "role",
-          attributes: ["key", "name"],
-        },
-        {
-          model: Organization,
-          as: "organization",
-          attributes: ["name"],
-        },
-      ],
-    });
+      {
+        model: Organization,
+        as: "organization",
+        attributes: ["name"],
+      },
+    ],
+  });
 
   const auth = await getCurrentUser();
   const authenticated = Boolean(auth);
@@ -776,37 +612,24 @@ export async function getPublicInvitation(
 
   const status = await expireIfNeeded(row);
   const user = await User.findOne({
-    where: {
-      email: normalizeEmail(row.email),
-    },
+    where: { email: normalizeEmail(row.email) },
     attributes: ["id"],
   });
 
   const base = {
-    organizationName:
-      row.organization?.name ?? null,
+    organizationName: row.organization?.name ?? null,
     invitedEmail: row.email,
     invitedName: row.name,
     roleName: row.role?.name ?? null,
     roleKey: row.role?.key ?? null,
-    expiresAt: new Date(
-      row.expiresAt,
-    ).toISOString(),
+    expiresAt: new Date(row.expiresAt).toISOString(),
     existingUser: Boolean(user),
     authenticated,
   };
 
-  if (status === "EXPIRED") {
-    return { ...base, state: "expired" };
-  }
-
-  if (status === "REVOKED") {
-    return { ...base, state: "revoked" };
-  }
-
-  if (status === "ACCEPTED") {
-    return { ...base, state: "accepted" };
-  }
+  if (status === "EXPIRED") return { ...base, state: "expired" };
+  if (status === "REVOKED") return { ...base, state: "revoked" };
+  if (status === "ACCEPTED") return { ...base, state: "accepted" };
 
   if (user) {
     const membership =
@@ -821,16 +644,12 @@ export async function getPublicInvitation(
         String(membership.organizationId) ===
         String(row.organizationId)
       ) {
-        return {
-          ...base,
-          state: "already-member",
-        };
+        return { ...base, state: "already-member" };
       }
 
       return {
         ...base,
-        state:
-          "already-in-another-organization",
+        state: "already-in-another-organization",
       };
     }
   }
@@ -840,38 +659,24 @@ export async function getPublicInvitation(
     normalizeEmail(auth.user.email) !==
       normalizeEmail(row.email)
   ) {
-    return {
-      ...base,
-      state: "email-mismatch",
-    };
+    return { ...base, state: "email-mismatch" };
   }
 
-  if (user) {
-    return {
-      ...base,
-      state: "valid-existing-user",
-    };
-  }
-
-  return {
-    ...base,
-    state: "valid-new-user",
-  };
+  if (user) return { ...base, state: "valid-existing-user" };
+  return { ...base, state: "valid-new-user" };
 }
 
 async function loadValidInvitation(
   token: string,
   transaction: Transaction,
 ) {
-  const row: any =
-    await Invitation.findOne({
-      where: {
-        tokenHash:
-          hashInvitationToken(token),
-      },
-      transaction,
-      lock: transaction.LOCK.UPDATE,
-    });
+  const row: any = await Invitation.findOne({
+    where: {
+      tokenHash: hashInvitationToken(token),
+    },
+    transaction,
+    lock: transaction.LOCK.UPDATE,
+  });
 
   if (!row) {
     throw new InvitationServiceError(
@@ -911,92 +716,82 @@ export async function acceptInvitationForNewUser({
   name: string;
   passwordHash: string;
 }) {
-  return sequelize.transaction(
-    async (transaction) => {
-      const invitation =
-        await loadValidInvitation(
-          token,
-          transaction,
-        );
-      const email = normalizeEmail(
-        invitation.email,
+  return sequelize.transaction(async (transaction) => {
+    const invitation = await loadValidInvitation(
+      token,
+      transaction,
+    );
+    const email = normalizeEmail(invitation.email);
+
+    const existing = await User.findOne({
+      where: { email },
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+
+    if (existing) {
+      throw new InvitationServiceError(
+        "An account already exists for this email. Sign in to accept the invitation instead.",
+        409,
       );
+    }
 
-      const existing =
-        await User.findOne({
-          where: { email },
-          transaction,
-          lock: transaction.LOCK.UPDATE,
-        });
+    const user = await User.create(
+      {
+        id: randomUUID(),
+        name: name.trim(),
+        email,
+        passwordHash,
+        emailVerified: new Date(),
+      },
+      { transaction },
+    );
 
-      if (existing) {
-        throw new InvitationServiceError(
-          "An account already exists for this email. Sign in to accept the invitation instead.",
-          409,
-        );
-      }
-
-      const user = await User.create(
-        {
-          id: randomUUID(),
-          name: name.trim(),
-          email,
-          passwordHash,
-          emailVerified: new Date(),
-        },
-        { transaction },
-      );
-
-      await OrganizationMembership.create(
-        {
-          id: randomUUID(),
-          userId: user.id,
-          organizationId:
-            invitation.organizationId,
-          roleId: invitation.roleId,
-        },
-        { transaction },
-      );
-
-      await invitation.update(
-        {
-          status: "ACCEPTED",
-          activeKey: null,
-          acceptedAt: new Date(),
-        },
-        { transaction },
-      );
-
-      await AuditLog.create(
-        {
-          id: randomUUID(),
-          organizationId:
-            invitation.organizationId,
-          actorUserId: user.id,
-          actorName: user.name,
-          actorEmail: user.email,
-          action: "INVITATION_ACCEPTED",
-          resource: "INVITATION",
-          resourceId: invitation.id,
-          targetUserId: user.id,
-          targetUserName: user.name,
-          targetUserEmail: user.email,
-          metadata: {
-            mode: "new-user",
-          },
-          ipAddress: null,
-          userAgent: null,
-          createdAt: new Date(),
-        },
-        { transaction },
-      );
-
-      return {
+    await OrganizationMembership.create(
+      {
+        id: randomUUID(),
         userId: user.id,
-        invitationId: invitation.id,
-      };
-    },
-  );
+        organizationId: invitation.organizationId,
+        roleId: invitation.roleId,
+      },
+      { transaction },
+    );
+
+    await invitation.update(
+      {
+        status: "ACCEPTED",
+        activeKey: null,
+        acceptedAt: new Date(),
+      },
+      { transaction },
+    );
+
+    await AuditLog.create(
+      {
+        id: randomUUID(),
+        organizationId: invitation.organizationId,
+        actorUserId: user.id,
+        actorName: user.name,
+        actorEmail: user.email,
+        action: "INVITATION_ACCEPTED",
+        resource: "INVITATION",
+        resourceId: invitation.id,
+        targetUserId: user.id,
+        targetUserName: user.name,
+        targetUserEmail: user.email,
+        metadata: { mode: "new-user" },
+        ipAddress: null,
+        userAgent: null,
+        createdAt: new Date(),
+      },
+      { transaction },
+    );
+
+    return {
+      userId: user.id,
+      invitationId: invitation.id,
+    };
+  });
 }
 
 export async function acceptInvitationForExistingUser(
@@ -1011,115 +806,106 @@ export async function acceptInvitationForExistingUser(
     );
   }
 
-  return sequelize.transaction(
-    async (transaction) => {
-      const invitation =
-        await loadValidInvitation(
-          token,
-          transaction,
-        );
+  return sequelize.transaction(async (transaction) => {
+    const invitation = await loadValidInvitation(
+      token,
+      transaction,
+    );
 
+    if (
+      normalizeEmail(auth.user.email) !==
+      normalizeEmail(invitation.email)
+    ) {
+      throw new InvitationServiceError(
+        "This invitation belongs to a different email address.",
+        403,
+      );
+    }
+
+    const membership =
+      await OrganizationMembership.findOne({
+        where: { userId: auth.user.id },
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+
+    if (membership) {
       if (
-        normalizeEmail(auth.user.email) !==
-        normalizeEmail(invitation.email)
+        String(membership.organizationId) ===
+        String(invitation.organizationId)
       ) {
-        throw new InvitationServiceError(
-          "This invitation belongs to a different email address.",
-          403,
-        );
-      }
-
-      const membership =
-        await OrganizationMembership.findOne({
-          where: { userId: auth.user.id },
-          transaction,
-          lock: transaction.LOCK.UPDATE,
-        });
-
-      if (membership) {
-        if (
-          String(membership.organizationId) ===
-          String(invitation.organizationId)
-        ) {
-          await invitation.update(
-            {
-              status: "ACCEPTED",
-              activeKey: null,
-              acceptedAt: new Date(),
-            },
-            { transaction },
-          );
-
-          return {
-            invitationId: invitation.id,
-            alreadyMember: true,
-          };
-        }
-
-        throw new InvitationServiceError(
-          "Your account already belongs to another organization.",
-          409,
-        );
-      }
-
-      await OrganizationMembership.create(
-        {
-          id: randomUUID(),
-          userId: auth.user.id,
-          organizationId:
-            invitation.organizationId,
-          roleId: invitation.roleId,
-        },
-        { transaction },
-      );
-
-      await invitation.update(
-        {
-          status: "ACCEPTED",
-          activeKey: null,
-          acceptedAt: new Date(),
-        },
-        { transaction },
-      );
-
-      await AuditLog.create(
-        {
-          id: randomUUID(),
-          organizationId:
-            invitation.organizationId,
-          actorUserId: auth.user.id,
-          actorName: auth.user.name,
-          actorEmail: auth.user.email,
-          action: "INVITATION_ACCEPTED",
-          resource: "INVITATION",
-          resourceId: invitation.id,
-          targetUserId: auth.user.id,
-          targetUserName: auth.user.name,
-          targetUserEmail: auth.user.email,
-          metadata: {
-            mode: "existing-user",
+        await invitation.update(
+          {
+            status: "ACCEPTED",
+            activeKey: null,
+            acceptedAt: new Date(),
           },
-          ipAddress: null,
-          userAgent: null,
-          createdAt: new Date(),
-        },
-        { transaction },
-      );
+          { transaction },
+        );
 
-      return {
-        invitationId: invitation.id,
-        alreadyMember: false,
-      };
-    },
-  );
+        return {
+          invitationId: invitation.id,
+          alreadyMember: true,
+        };
+      }
+
+      throw new InvitationServiceError(
+        "Your account already belongs to another organization.",
+        409,
+      );
+    }
+
+    await OrganizationMembership.create(
+      {
+        id: randomUUID(),
+        userId: auth.user.id,
+        organizationId: invitation.organizationId,
+        roleId: invitation.roleId,
+      },
+      { transaction },
+    );
+
+    await invitation.update(
+      {
+        status: "ACCEPTED",
+        activeKey: null,
+        acceptedAt: new Date(),
+      },
+      { transaction },
+    );
+
+    await AuditLog.create(
+      {
+        id: randomUUID(),
+        organizationId: invitation.organizationId,
+        actorUserId: auth.user.id,
+        actorName: auth.user.name,
+        actorEmail: auth.user.email,
+        action: "INVITATION_ACCEPTED",
+        resource: "INVITATION",
+        resourceId: invitation.id,
+        targetUserId: auth.user.id,
+        targetUserName: auth.user.name,
+        targetUserEmail: auth.user.email,
+        metadata: { mode: "existing-user" },
+        ipAddress: null,
+        userAgent: null,
+        createdAt: new Date(),
+      },
+      { transaction },
+    );
+
+    return {
+      invitationId: invitation.id,
+      alreadyMember: false,
+    };
+  });
 }
 
 export async function importInvitations(
   inputs: ImportInvitationInput[],
 ) {
-  await requirePermission(
-    "INVITATION_IMPORT",
-  );
+  await requirePermission("INVITATION_IMPORT");
 
   if (!inputs.length) {
     throw new InvitationServiceError(
@@ -1127,10 +913,7 @@ export async function importInvitations(
     );
   }
 
-  if (
-    inputs.length >
-    INVITATION_MAX_IMPORT_ROWS
-  ) {
+  if (inputs.length > INVITATION_MAX_IMPORT_ROWS) {
     throw new InvitationServiceError(
       `A maximum of ${INVITATION_MAX_IMPORT_ROWS} invitations can be imported at once.`,
     );
@@ -1159,11 +942,12 @@ export async function importInvitations(
     seen.add(email);
 
     try {
-      created.push(
-        (
-          await createInvitation(input)
-        ).invitation,
-      );
+      const result = await createInvitation(input);
+      created.push(result.invitation);
+
+      if (!result.emailSent) {
+        failedEmails.push(email);
+      }
     } catch (error) {
       skipped.push({
         email,
@@ -1182,6 +966,7 @@ export async function importInvitations(
       metadata: {
         createdCount: created.length,
         skippedCount: skipped.length,
+        failedEmailCount: failedEmails.length,
       },
     });
   }
