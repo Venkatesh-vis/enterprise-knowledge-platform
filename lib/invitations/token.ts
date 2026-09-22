@@ -8,7 +8,13 @@ import {
 } from "./constants";
 
 export function createInvitationToken() {
-  return randomBytes(32).toString("hex");
+  const token = randomBytes(32).toString("hex");
+  const tokenHash = hashInvitationToken(token);
+
+  return {
+    token,
+    tokenHash,
+  };
 }
 
 export function hashInvitationToken(
