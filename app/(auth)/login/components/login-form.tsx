@@ -22,7 +22,6 @@ const loginSchema = z.object({
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
-
 type LoginResponse = { success: boolean; message: string };
 
 export function LoginForm() {
@@ -31,7 +30,11 @@ export function LoginForm() {
   const invitationToken = searchParams.get("invitation");
   const [serverError, setServerError] = useState<string | null>(null);
 
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginFormValues>({
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
     mode: "onBlur",
@@ -39,55 +42,194 @@ export function LoginForm() {
 
   async function onSubmit(values: LoginFormValues) {
     setServerError(null);
+
     try {
-      const response = await apiRequest<LoginResponse>({ path: "/api/auth/login", method: "POST", body: values });
+      const response = await apiRequest<LoginResponse>({
+        path: "/api/auth/login",
+        method: "POST",
+        body: values,
+      });
+
       if (!response.success) {
-        setServerError(response.message || "Unable to sign in.");
+        setServerError(
+          response.message || "Unable to sign in.",
+        );
         return;
       }
 
       if (invitationToken) {
         try {
-          await apiRequest({ path: "/api/invitations/accept", method: "POST", body: { mode: "existing", token: invitationToken } });
+          await apiRequest({
+            path: "/api/invitations/accept",
+            method: "POST",
+            body: {
+              mode: "existing",
+              token: invitationToken,
+            },
+          });
         } catch (error) {
-          setServerError(isAxiosError(error) ? error.response?.data?.message ?? "Unable to accept the invitation." : "Unable to accept the invitation.");
+          setServerError(
+            isAxiosError(error)
+              ? error.response?.data?.message ??
+                  "Unable to accept the invitation."
+              : "Unable to accept the invitation.",
+          );
           return;
         }
       }
 
       router.replace("/dashboard");
-      router.refresh();
     } catch (error) {
-      setServerError(isAxiosError(error) ? error.response?.data?.message ?? "Unable to sign in. Please try again." : "Unable to connect to the server. Please try again.");
+      setServerError(
+        isAxiosError(error)
+          ? error.response?.data?.message ??
+              "Unable to sign in. Please try again."
+          : "Unable to connect to the server. Please try again.",
+      );
     }
   }
 
   function handleGoogleSignIn() {
-    setServerError("Google sign-in is not available yet.");
+    setServerError(
+      "Google sign-in is not available yet.",
+    );
   }
 
   return (
-    <section aria-labelledby="login-title" className="w-full max-w-md">
+    <section
+      aria-labelledby="login-title"
+      className="w-full max-w-md"
+    >
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-900/5 sm:p-8">
         <div className="text-center">
-          <div aria-hidden="true" className="mx-auto flex h-11 w-11 items-center justify-center"><Image src="/icon.svg" alt="" width={44} height={44} className="h-11 w-11 object-contain" /></div>
-          <h1 id="login-title" className="mt-5 text-2xl font-semibold tracking-tight text-slate-950">Welcome back</h1>
-          <p className="mt-2 text-sm leading-6 text-slate-500">Sign in to continue to your knowledge workspace.</p>
+          <div
+            aria-hidden="true"
+            className="mx-auto flex h-11 w-11 items-center justify-center"
+          >
+            <Image
+              src="/icon.svg"
+              alt=""
+              width={44}
+              height={44}
+              className="h-11 w-11 object-contain"
+            />
+          </div>
+          <h1
+            id="login-title"
+            className="mt-5 text-2xl font-semibold tracking-tight text-slate-950"
+          >
+            Welcome back
+          </h1>
+          <p className="mt-2 text-sm leading-6 text-slate-500">
+            Sign in to continue to your knowledge workspace.
+          </p>
         </div>
 
-        {invitationToken && <div className="mt-6 rounded-lg border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm text-indigo-800">After sign in, this invitation will be accepted automatically.</div>}
-        {serverError && <div role="alert" aria-live="polite" className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{serverError}</div>}
+        {invitationToken && (
+          <div className="mt-6 rounded-lg border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm text-indigo-800">
+            After sign in, this invitation will be accepted automatically.
+          </div>
+        )}
 
-        <div className="mt-8"><SocialButton provider="google" onClick={handleGoogleSignIn} disabled={isSubmitting} /></div>
-        <div aria-hidden="true" className="my-6 flex items-center gap-4"><div className="h-px flex-1 bg-slate-200" /><span className="shrink-0 text-xs font-medium uppercase tracking-wider text-slate-400">Or continue with email</span><div className="h-px flex-1 bg-slate-200" /></div>
+        {serverError && (
+          <div
+            role="alert"
+            aria-live="polite"
+            className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+          >
+            {serverError}
+          </div>
+        )}
 
-        <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
-          <div><Label htmlFor="login-email" required>Work email</Label><Input id="login-email" type="email" autoComplete="email" placeholder="you@company.com" disabled={isSubmitting} {...register("email")} error={!!errors.email} /><FieldError id="login-email-error" message={errors.email?.message} /></div>
-          <div><div className="flex items-center justify-between gap-4"><Label htmlFor="login-password" required>Password</Label><span className="shrink-0 text-xs text-slate-400">Password recovery coming soon</span></div><Input id="login-password" type="password" autoComplete="current-password" placeholder="Enter your password" disabled={isSubmitting} {...register("password")} error={!!errors.password} /><FieldError id="login-password-error" message={errors.password?.message} /></div>
-          <Button type="submit" disabled={isSubmitting} className="w-full">{isSubmitting ? "Signing in..." : invitationToken ? "Sign in & accept invitation" : "Sign in"}</Button>
+        <div className="mt-8">
+          <SocialButton
+            provider="google"
+            onClick={handleGoogleSignIn}
+            disabled={isSubmitting}
+          />
+        </div>
+
+        <div
+          aria-hidden="true"
+          className="my-6 flex items-center gap-4"
+        >
+          <div className="h-px flex-1 bg-slate-200" />
+          <span className="shrink-0 text-xs font-medium uppercase tracking-wider text-slate-400">
+            Or continue with email
+          </span>
+          <div className="h-px flex-1 bg-slate-200" />
+        </div>
+
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          noValidate
+          className="space-y-5"
+        >
+          <div>
+            <Label htmlFor="login-email" required>
+              Work email
+            </Label>
+            <Input
+              id="login-email"
+              type="email"
+              autoComplete="email"
+              placeholder="you@company.com"
+              disabled={isSubmitting}
+              {...register("email")}
+              error={!!errors.email}
+            />
+            <FieldError
+              id="login-email-error"
+              message={errors.email?.message}
+            />
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between gap-4">
+              <Label htmlFor="login-password" required>
+                Password
+              </Label>
+              <span className="shrink-0 text-xs text-slate-400">
+                Password recovery coming soon
+              </span>
+            </div>
+            <Input
+              id="login-password"
+              type="password"
+              autoComplete="current-password"
+              placeholder="Enter your password"
+              disabled={isSubmitting}
+              {...register("password")}
+              error={!!errors.password}
+            />
+            <FieldError
+              id="login-password-error"
+              message={errors.password?.message}
+            />
+          </div>
+
+          <Button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full"
+          >
+            {isSubmitting
+              ? "Signing in..."
+              : invitationToken
+                ? "Sign in & accept invitation"
+                : "Sign in"}
+          </Button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-slate-500">Need an account? <Link href="/register" className="font-medium text-slate-900 hover:underline">Create one</Link></p>
+        <p className="mt-6 text-center text-sm text-slate-500">
+          Need an account?{" "}
+          <Link
+            href="/register"
+            className="font-medium text-slate-900 hover:underline"
+          >
+            Create one
+          </Link>
+        </p>
       </div>
     </section>
   );
