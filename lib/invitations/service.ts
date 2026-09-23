@@ -382,8 +382,14 @@ export async function createInvitation(
 ) {
   const { auth, email, name, role } =
     await validateCreate(input);
-  const { token, tokenHash } =
+  const invitationToken =
     createInvitationToken();
+
+  const token =
+    invitationToken.token;
+
+  const tokenHash =
+    invitationToken.tokenHash;
   const now = new Date();
   const invitation = await Invitation.create({
     id: randomUUID(),
@@ -412,6 +418,8 @@ export async function createInvitation(
       organizationName: auth.organization.name,
       roleName: role.name,
       token,
+      inviterName: auth.user.name,
+      inviterEmail: auth.user.email,
     });
   } catch (error) {
     emailSent = false;
@@ -465,7 +473,14 @@ export async function resendInvitation(id: string) {
     );
   }
 
-  const { token, tokenHash } = createInvitationToken();
+  const invitationToken =
+    createInvitationToken();
+
+  const token =
+    invitationToken.token;
+
+  const tokenHash =
+    invitationToken.tokenHash;
   const now = new Date();
 
   await invitation.update({
@@ -496,6 +511,8 @@ export async function resendInvitation(id: string) {
       organizationName: auth.organization.name,
       roleName: role?.name ?? "Member",
       token,
+      inviterName: auth.user.name,
+      inviterEmail: auth.user.email,
     });
   } catch (error) {
     emailSent = false;

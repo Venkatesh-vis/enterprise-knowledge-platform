@@ -1,68 +1,205 @@
 import "server-only";
 
-const URL = "https://api.mailjet.com/v3.1/send";
+import axios from "axios";
 
-export async function sendMailjetEmail(input: {
-  toEmail: string;
-  toName: string;
-  fromEmail: string;
-  fromName: string;
-  replyToEmail?: string;
-  replyToName?: string;
+const MAILJET_URL =
+  "https://api.mailjet.com/v3.1/send";
+
+type MailRecipient = {
+  email: string;
+  name?: string;
+};
+
+type SendMailjetEmailInput = {
+  to: MailRecipient[];
+
+  from: MailRecipient;
+
+  replyTo?: MailRecipient;
+
+  cc?: MailRecipient[];
+
+  bcc?: MailRecipient[];
+
   subject: string;
+
   text: string;
+
   html: string;
-}) {
-  const apiKey = process.env.MAILJET_API_KEY?.trim();
-  const secret = process.env.MAILJET_API_SECRET?.trim();
+};
+
+function mapRecipients(
+  recipients: MailRecipient[],
+) {
+  return recipients.map(
+    (recipient) => ({
+      Email: recipient.email,
+
+      ...(recipient.name
+        ? {
+            Name: recipient.name,
+          }
+        : {}),
+    }),
+  );
+}
+
+function validateRecipient(
+  recipient: MailRecipient,
+) {
+  if (!recipient.email?.trim()) {
+    throw new Error(
+      "Recipient email is required.",
+    );
+  }
+}
+
+export async function sendMailjetEmail(
+  input: SendMailjetEmailInput,
+) {
+  const apiKey =
+    process.env.MAILJET_API_KEY?.trim();
+
+  const secret =
+    process.env.MAILJET_API_SECRET?.trim();
 
   if (!apiKey || !secret) {
-    throw new Error("Mail service is not configured.");
+    throw new Error(
+      "Mail service is not configured.",
+    );
   }
 
-  if (!input.fromEmail || !input.fromName) {
-    throw new Error("Sender name and email are required.");
+  if (!input.from.email?.trim()) {
+    throw new Error(
+      "Sender email is required.",
+    );
   }
 
-  const auth = Buffer.from(`${apiKey}:${secret}`).toString("base64");
+  if (!input.from.name?.trim()) {
+    throw new Error(
+      "Sender name is required.",
+    );
+  }
+
+  if (!input.to.length) {
+    throw new Error(
+      "At least one recipient is required.",
+    );
+  }
+
+  input.to.forEach(
+    validateRecipient,
+  );
+
+  input.cc?.forEach(
+    validateRecipient,
+  );
+
+  input.bcc?.forEach(
+    validateRecipient,
+  );
+
+  const auth = Buffer.from(
+    `${apiKey}:${secret}`,
+  ).toString("base64");
+
   const message = {
     From: {
-      Email: input.fromEmail,
-      Name: input.fromName,
+      Email:
+        input.from.email,
+      Name:
+        input.from.name,
     },
-    To: [{
-      Email: input.toEmail,
-      Name: input.toName,
-    }],
-    Subject: input.subject,
-    TextPart: input.text,
-    HTMLPart: input.html,
-    ...(input.replyToEmail
+
+    To: mapRecipients(
+      input.to,
+    ),
+
+    ...(input.cc?.length
+      ? {
+          Cc: mapRecipients(
+            input.cc,
+          ),
+        }
+      : {}),
+
+    ...(input.bcc?.length
+      ? {
+          Bcc: mapRecipients(
+            input.bcc,
+          ),
+        }
+      : {}),
+
+    ...(input.replyTo
       ? {
           ReplyTo: {
-            Email: input.replyToEmail,
-            Name: input.replyToName || input.fromName,
+            Email:
+              input.replyTo.email,
+            Name:
+              input.replyTo.name ||
+              input.from.name,
           },
         }
       : {}),
+
+    Subject:
+      input.subject,
+
+    TextPart:
+      input.text,
+
+    HTMLPart:
+      input.html,
   };
 
-  const response = await fetch(URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${auth}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ Messages: [message] }),
-    cache: "no-store",
-  });
+  try {
+    const response =
+      await axios.post(
+        MAILJET_URL,
+        {
+          Messages: [
+            message,
+          ],
+        },
+        {
+          headers: {
+            Authorization:
+              `Basic ${auth}`,
 
-  if (!response.ok) {
-    const details = await response.text();
-    throw new Error(
-      details
-        ? `Email delivery failed (${response.status}): ${details}`
-        : `Email delivery failed (${response.status}).`,
-    );
+            "Content-Type":
+              "application/json",
+          },
+
+          timeout: 15000,
+        },
+      );
+
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      const status =
+        error.response?.status;
+
+      const details =
+        error.response?.data;
+
+      const message =
+        typeof details === "string"
+          ? details
+          : details?.ErrorMessage ||
+            details?.ErrorInfo ||
+            JSON.stringify(
+              details,
+            );
+
+      throw new Error(
+        message
+          ? `Mailjet delivery failed (${status ?? "unknown"}): ${message}`
+          : `Mailjet delivery failed (${status ?? "unknown"}).`,
+      );
+    }
+
+    throw error;
   }
 }

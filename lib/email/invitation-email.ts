@@ -1,60 +1,150 @@
 import "server-only";
 
-import { getCurrentUser } from "@/lib/auth/get-current-user";
+import {
+  sendMailjetEmail,
+} from "./mailjet";
 
-import { sendMailjetEmail } from "./mailjet";
+import {
+  createInvitationTemplate,
+} from "./templates/invitation-template";
 
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
+export async function sendInvitationEmail(
+  input: {
+    email: string;
 
-function invitationUrl(token: string) {
-  const base = process.env.NEXT_PUBLIC_APP_URL?.trim();
-  if (!base) throw new Error("NEXT_PUBLIC_APP_URL is required.");
-  return `${base.replace(/\/$/, "")}/invitations/${token}`;
-}
+    name: string;
 
-export async function sendInvitationEmail(input: {
-  email: string;
-  name: string;
-  organizationName: string;
-  roleName: string;
-  token: string;
-  inviterName?: string;
-  inviterEmail?: string;
-}) {
-  const inviter = await getCurrentUser();
-  const inviterName =
-    input.inviterName?.trim() || inviter?.user.name?.trim();
-  const inviterEmail =
-    input.inviterEmail?.trim().toLowerCase() ||
-    inviter?.user.email?.trim().toLowerCase();
+    organizationName: string;
 
-  if (!inviterName || !inviterEmail) {
-    throw new Error("Unable to determine the invitation sender.");
+    roleName: string;
+
+    token: string;
+
+    inviterName: string;
+
+    inviterEmail: string;
+  },
+) {
+  const fromEmail =
+    process.env
+      .MAIL_FROM_EMAIL
+      ?.trim()
+      .toLowerCase();
+
+  const fromName =
+    process.env
+      .MAIL_FROM_NAME
+      ?.trim() ||
+    "Enterprise Knowledge";
+
+  if (!fromEmail) {
+    throw new Error(
+      "MAIL_FROM_EMAIL is required.",
+    );
   }
 
-  const url = invitationUrl(input.token);
-  const safeName = escapeHtml(input.name);
-  const safeOrganization = escapeHtml(input.organizationName);
-  const safeRole = escapeHtml(input.roleName);
-  const safeInviter = escapeHtml(inviterName);
-  const safeUrl = escapeHtml(url);
+  const inviterName =
+    input.inviterName.trim();
+
+  const inviterEmail =
+    input.inviterEmail
+      .trim()
+      .toLowerCase();
+
+  if (!inviterName) {
+    throw new Error(
+      "Invitation sender name is required.",
+    );
+  }
+
+  if (!inviterEmail) {
+    throw new Error(
+      "Invitation sender email is required.",
+    );
+  }
+
+  const baseUrl =
+    process.env
+      .NEXT_PUBLIC_APP_URL
+      ?.trim();
+
+  if (!baseUrl) {
+    throw new Error(
+      "NEXT_PUBLIC_APP_URL is required.",
+    );
+  }
+
+  const invitationUrl =
+    `${baseUrl.replace(/\/$/, "")}` +
+    `/invitations/${input.token}`;
+
+  const template =
+    createInvitationTemplate({
+      recipientName:
+        input.name,
+
+      organizationName:
+        input.organizationName,
+
+      roleName:
+        input.roleName,
+
+      inviterName,
+
+      invitationUrl,
+    });
+
+  const sameEmail =
+    input.email
+      .trim()
+      .toLowerCase() ===
+    inviterEmail;
 
   await sendMailjetEmail({
-    toEmail: input.email,
-    toName: input.name,
-    fromEmail: inviterEmail,
-    fromName: inviterName,
-    replyToEmail: inviterEmail,
-    replyToName: inviterName,
-    subject: `You're invited to join ${input.organizationName}`,
-    text: `Hi ${input.name},\n\n${inviterName} invited you to join ${input.organizationName} as ${input.roleName}.\n\nAccept your invitation:\n${url}\n\nThis invitation expires in 7 days.`,
-    html: `<!doctype html><html><body style="font-family:Arial,sans-serif;background:#f8fafc;padding:32px"><div style="max-width:600px;margin:auto;background:#fff;padding:32px;border-radius:16px;border:1px solid #e2e8f0"><h1>You're invited</h1><p>Hi ${safeName}, ${safeInviter} invited you to join ${safeOrganization}.</p><p>Assigned role: <strong>${safeRole}</strong></p><p><a href="${safeUrl}" style="display:inline-block;padding:12px 18px;background:#0f172a;color:#fff;border-radius:8px;text-decoration:none">Accept invitation</a></p><p style="color:#64748b;font-size:12px">This invitation expires in 7 days.</p></div></body></html>`,
+    from: {
+      email:
+        fromEmail,
+
+      name:
+        fromName,
+    },
+
+    to: [
+      {
+        email:
+          input.email,
+        name:
+          input.name,
+      },
+    ],
+
+    replyTo: {
+      email:
+        inviterEmail,
+
+      name:
+        inviterName,
+    },
+
+    bcc: sameEmail
+      ? undefined
+      : [
+          {
+            email:
+              inviterEmail,
+
+            name:
+              inviterName,
+          },
+        ],
+
+    subject:
+      template.subject,
+
+    text:
+      template.text,
+
+    html:
+      template.html,
   });
 }

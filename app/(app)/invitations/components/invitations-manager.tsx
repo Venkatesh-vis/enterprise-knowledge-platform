@@ -240,7 +240,7 @@ export function InvitationsManager({
             Invitations
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Manage organization invitations without a page refresh.
+            Manage organization invitations.
           </p>
         </div>
 
@@ -252,7 +252,7 @@ export function InvitationsManager({
               onClick={() => setDialog("import")}
             >
               <Upload className="mr-2 h-4 w-4" />
-              Import
+              Bulk Invite
             </Button>
           )}
           {data.permissions.canCreate && (
@@ -298,7 +298,7 @@ export function InvitationsManager({
             onChange={(event) =>
               setQuery(event.target.value)
             }
-            placeholder="Search loaded invitations..."
+            placeholder="Search invitations..."
             className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-slate-400"
           />
         </div>
