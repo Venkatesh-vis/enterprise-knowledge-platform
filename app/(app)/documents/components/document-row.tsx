@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Download,
   FileText,
@@ -78,6 +79,7 @@ function DocumentActions({
 }: {
   document: Document;
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -102,7 +104,7 @@ function DocumentActions({
 
       setConfirmOpen(false);
       setOpen(false);
-      window.location.reload();
+      router.refresh();
     } catch (deleteError) {
       setError(
         deleteError instanceof Error
