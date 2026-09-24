@@ -2,6 +2,8 @@ import User from "./user";
 import Organization from "./organization";
 import OrganizationMembership from "./organization-membership";
 import Document from "./document";
+import KnowledgeBase from "./knowledge-base";
+import DocumentKnowledgeBase from "./document-knowledge-base";
 import Role from "./role";
 import Permission from "./permission";
 import RolePermission from "./role-permission";
@@ -31,11 +33,37 @@ Invitation.belongsTo(User, { foreignKey: "invitedByUserId", as: "invitedBy" });
 Invitation.belongsTo(Role, { foreignKey: "roleId", as: "role" });
 Organization.hasMany(Invitation, { foreignKey: "organizationId", as: "invitations" });
 
+Organization.hasMany(Document, { foreignKey: "organizationId", as: "documents" });
+Document.belongsTo(Organization, { foreignKey: "organizationId", as: "organization" });
+Document.belongsTo(User, { foreignKey: "uploadedByUserId", as: "uploadedByUser" });
+User.hasMany(Document, { foreignKey: "uploadedByUserId", as: "documents" });
+
+Organization.hasMany(KnowledgeBase, { foreignKey: "organizationId", as: "knowledgeBases" });
+KnowledgeBase.belongsTo(Organization, { foreignKey: "organizationId", as: "organization" });
+KnowledgeBase.belongsTo(User, { foreignKey: "createdByUserId", as: "createdBy" });
+User.hasMany(KnowledgeBase, { foreignKey: "createdByUserId", as: "knowledgeBasesCreated" });
+
+Document.belongsToMany(KnowledgeBase, {
+  through: DocumentKnowledgeBase,
+  foreignKey: "documentId",
+  otherKey: "knowledgeBaseId",
+  as: "knowledgeBases",
+});
+
+KnowledgeBase.belongsToMany(Document, {
+  through: DocumentKnowledgeBase,
+  foreignKey: "knowledgeBaseId",
+  otherKey: "documentId",
+  as: "documents",
+});
+
 export {
   User,
   Organization,
   OrganizationMembership,
   Document,
+  KnowledgeBase,
+  DocumentKnowledgeBase,
   Role,
   Permission,
   RolePermission,
