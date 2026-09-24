@@ -1,4 +1,3 @@
-import { Readable } from "node:stream";
 import { errorResponse } from "@/lib/http/api-error";
 import { getDocumentStorageAccess } from "@/lib/documents/service";
 import { documentStorage } from "@/lib/documents/storage";
@@ -12,14 +11,9 @@ export async function GET(_request: Request, context: Context) {
   try {
     const { id } = await context.params;
     const document = await getDocumentStorageAccess(id);
-    if (!(await documentStorage.exists(document.storageKey))) {
-      return new Response(JSON.stringify({ success: false, message: "Document file is unavailable." }), {
-        status: 410,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-    const stream = documentStorage.createReadStream(document.storageKey);
-    return new Response(Readable.toWeb(stream) as ReadableStream, {
+    const stream = await documentStorage.createReadStream(document.storageKey);
+
+    return new Response(stream, {
       headers: {
         "Content-Type": DOCUMENT_MIME_TYPES[document.fileType],
         "Content-Length": String(document.sizeBytes),
