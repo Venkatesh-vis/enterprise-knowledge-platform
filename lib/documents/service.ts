@@ -6,7 +6,7 @@ import { Document, DocumentKnowledgeBase, KnowledgeBase, User } from "@/db/model
 import sequelize from "@/lib/database";
 import { requirePermission } from "@/lib/auth/authorization";
 import { createAuditLog } from "@/lib/audit/audit-service";
-import { DOCUMENT_EXTENSIONS, DOCUMENT_PAGE_SIZE, type DocumentFileType } from "./constants";
+import { DOCUMENT_EXTENSIONS, DOCUMENT_MIME_TYPES, DOCUMENT_PAGE_SIZE, type DocumentFileType } from "./constants";
 import { documentStorage } from "./storage";
 import { normalizeKnowledgeBaseIds, validateDocumentFile, validateDocumentName } from "./validation";
 
@@ -131,7 +131,11 @@ export async function createDocument(input: { file: File; name: string; knowledg
   let stored = false;
 
   try {
-    await documentStorage.save(storageKey, Buffer.from(await input.file.arrayBuffer()));
+    await documentStorage.save(
+      storageKey,
+      Buffer.from(await input.file.arrayBuffer()),
+      DOCUMENT_MIME_TYPES[fileType],
+    );
     stored = true;
     await sequelize.transaction(async (transaction) => {
       await Document.create({
