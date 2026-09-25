@@ -41,63 +41,43 @@ export type UsersDirectoryData = {
   pagination: UsersPagination;
   roles: UserRoleOption[];
   stats: UsersDirectoryStats;
+  canUpdate: boolean;
+  canDelete: boolean;
+  currentUserId: string;
+  currentRole: UserRoleKey;
 };
 
 export type UserDetailData = {
   user: UserListItem;
-
-  organization: {
-    id: string;
-    name: string;
-  };
-
+  organization: { id: string; name: string };
   permissions: UserPermission[];
-
   roles: UserRoleOption[];
-
   allowedRoleKeys: UserRoleKey[];
-
   canUpdate: boolean;
-
   canDelete: boolean;
-
   currentUserId: string;
-
   currentRole: UserRoleKey;
 };
 
 export type UserNotification = {
   id: string;
-
-  type:
-    | "ROLE_CHANGED"
-    | "REMOVED_FROM_ORGANIZATION";
-
+  type: "ROLE_CHANGED" | "REMOVED_FROM_ORGANIZATION";
   title: string;
-
   message: string;
-
   metadata: Record<string, unknown> | null;
-
   readAt: string | null;
-
   createdAt: string;
 };
 
 export type UserPermission = {
   key: string;
-
   name: string;
-
   resource: string;
-
   action: string;
-
   description: string | null;
 };
 
 export type UserRoleUpdateResult = {
   user: UserListItem;
-
   permissions: UserPermission[];
 };
