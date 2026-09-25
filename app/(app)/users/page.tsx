@@ -38,8 +38,8 @@ export default async function UsersRoutePage({
         ...data,
         canUpdate: currentUser?.permissions.includes("USER_UPDATE") ?? false,
         canDelete: currentUser?.permissions.includes("USER_DELETE") ?? false,
-        currentUserId: currentUser?.user.id,
-        currentRole: currentUser?.membership.role,
+        currentUserId: currentUser?.user.id ?? "",
+        currentRole: currentUser?.membership.role ?? "MEMBER",
       }}
     />
   );
