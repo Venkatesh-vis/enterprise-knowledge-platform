@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   CalendarDays,
   Download,
@@ -30,7 +29,8 @@ type Document = {
 
 type DeleteResponse = {
   success: boolean;
-  message: string;
+  message?: string;
+  data?: { documentId: string };
 };
 
 type DocumentRowProps = {
@@ -38,6 +38,7 @@ type DocumentRowProps = {
   selected: boolean;
   onSelect: () => void;
   onClose: () => void;
+  onDeleted: (documentId: string) => void;
 };
 
 const fileStyles = {
@@ -50,6 +51,7 @@ export function DocumentRow({
   selected,
   onSelect,
   onClose,
+  onDeleted,
 }: DocumentRowProps) {
   return (
     <article
@@ -82,6 +84,7 @@ export function DocumentRow({
           open={selected}
           onSelect={onSelect}
           onClose={onClose}
+          onDeleted={onDeleted}
         />
       </div>
 
@@ -112,13 +115,14 @@ function DocumentActions({
   open,
   onSelect,
   onClose,
+  onDeleted,
 }: {
   document: Document;
   open: boolean;
   onSelect: () => void;
   onClose: () => void;
+  onDeleted: (documentId: string) => void;
 }) {
-  const router = useRouter();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -129,17 +133,19 @@ function DocumentActions({
 
     try {
       const result = await apiRequest<DeleteResponse>({
-        path: `/api/documents/${document.id}`,
+        path: `/api/documents/${encodeURIComponent(document.id)}`,
         method: "DELETE",
       });
 
       if (!result.success) {
-        throw new Error(result.message || "Unable to delete document.");
+        throw new Error(
+          result.message ?? "Unable to delete document.",
+        );
       }
 
       setConfirmOpen(false);
       onClose();
-      router.refresh();
+      onDeleted(result.data?.documentId ?? document.id);
     } catch (deleteError) {
       setError(
         deleteError instanceof Error
@@ -177,7 +183,7 @@ function DocumentActions({
             onPointerDown={(event) => event.stopPropagation()}
           >
             <Link
-              href={`/api/documents/${document.id}/download`}
+              href={`/api/documents/${encodeURIComponent(document.id)}/download`}
               className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
               onClick={onClose}
             >
