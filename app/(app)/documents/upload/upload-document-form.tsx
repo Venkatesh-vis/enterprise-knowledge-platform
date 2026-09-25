@@ -15,7 +15,13 @@ type KnowledgeBase = {
 
 type UploadResponse = {
   success: boolean;
-  message: string;
+  message?: string;
+  data: {
+    document: {
+      id: string;
+      name: string;
+    };
+  };
 };
 
 export function UploadDocumentForm({
@@ -28,10 +34,10 @@ export function UploadDocumentForm({
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState("");
-  const [selected, setSelected] =
-    useState(initialSelection);
+  const [selected, setSelected] = useState(initialSelection);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [success, setSuccess] = useState("");
 
   function toggleBase(id: string) {
     setSelected((current) =>
@@ -41,11 +47,10 @@ export function UploadDocumentForm({
     );
   }
 
-  async function submit(
-    event: React.FormEvent<HTMLFormElement>,
-  ) {
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
+    setSuccess("");
 
     if (!file) {
       setError("Select a PDF or DOCX file.");
@@ -59,13 +64,8 @@ export function UploadDocumentForm({
 
     const formData = new FormData();
     formData.append("file", file);
-    formData.append(
-      "name",
-      name.trim() || file.name,
-    );
-    selected.forEach((id) =>
-      formData.append("knowledgeBaseIds", id),
-    );
+    formData.append("name", name.trim() || file.name);
+    selected.forEach((id) => formData.append("knowledgeBaseIds", id));
 
     setBusy(true);
 
@@ -77,13 +77,14 @@ export function UploadDocumentForm({
       });
 
       if (!result.success) {
-        throw new Error(
-          result.message || "Upload failed.",
-        );
+        throw new Error(result.message ?? "Upload failed.");
       }
 
+      setFile(null);
+      setName("");
+      setSuccess("Document uploaded successfully.");
+
       router.push("/documents");
-      router.refresh();
     } catch (uploadError) {
       setError(
         uploadError instanceof Error
@@ -101,9 +102,7 @@ export function UploadDocumentForm({
       className="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
     >
       <div>
-        <label className="text-sm font-medium text-slate-700">
-          File
-        </label>
+        <label className="text-sm font-medium text-slate-700">File</label>
         <Input
           type="file"
           accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -123,9 +122,7 @@ export function UploadDocumentForm({
         </label>
         <Input
           value={name}
-          onChange={(event) =>
-            setName(event.target.value)
-          }
+          onChange={(event) => setName(event.target.value)}
           placeholder={file?.name || "Document name"}
           className="mt-2"
         />
@@ -155,9 +152,7 @@ export function UploadDocumentForm({
             >
               <Checkbox
                 checked={selected.includes(base.id)}
-                onCheckedChange={() =>
-                  toggleBase(base.id)
-                }
+                onCheckedChange={() => toggleBase(base.id)}
                 aria-label={`Select ${base.name}`}
               />
               <span className="text-sm font-medium text-slate-800">
@@ -174,6 +169,15 @@ export function UploadDocumentForm({
           className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700"
         >
           {error}
+        </p>
+      )}
+
+      {success && (
+        <p
+          role="status"
+          className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700"
+        >
+          {success}
         </p>
       )}
 
