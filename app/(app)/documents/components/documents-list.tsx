@@ -21,8 +21,13 @@ export function DocumentsList({
 }: {
   documents: Document[];
 }) {
+  const [items, setItems] = useState(documents);
   const [selectedDocumentId, setSelectedDocumentId] =
     useState<string | null>(null);
+
+  useEffect(() => {
+    setItems(documents);
+  }, [documents]);
 
   useEffect(() => {
     if (!selectedDocumentId) return;
@@ -47,7 +52,13 @@ export function DocumentsList({
     };
   }, [selectedDocumentId]);
 
-  if (documents.length === 0) {
+  function removeDocument(documentId: string) {
+    setItems((current) =>
+      current.filter((document) => document.id !== documentId),
+    );
+  }
+
+  if (items.length === 0) {
     return (
       <EmptyState
         title="No documents found"
@@ -58,13 +69,14 @@ export function DocumentsList({
 
   return (
     <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      {documents.map((document) => (
+      {items.map((document) => (
         <DocumentRow
           key={document.id}
           document={document}
           selected={selectedDocumentId === document.id}
           onSelect={() => setSelectedDocumentId(document.id)}
           onClose={() => setSelectedDocumentId(null)}
+          onDeleted={removeDocument}
         />
       ))}
     </section>
