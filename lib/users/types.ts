@@ -41,15 +41,18 @@ export type UsersDirectoryData = {
   pagination: UsersPagination;
   roles: UserRoleOption[];
   stats: UsersDirectoryStats;
-  canUpdate: boolean;
-  canDelete: boolean;
-  currentUserId: string;
-  currentRole: UserRoleKey;
+  canUpdate?: boolean;
+  canDelete?: boolean;
+  currentUserId?: string;
+  currentRole?: UserRoleKey;
 };
 
 export type UserDetailData = {
   user: UserListItem;
-  organization: { id: string; name: string };
+  organization: {
+    id: string;
+    name: string;
+  };
   permissions: UserPermission[];
   roles: UserRoleOption[];
   allowedRoleKeys: UserRoleKey[];
