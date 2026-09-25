@@ -1,12 +1,18 @@
 "use client";
 
-import type { UsersDirectoryData } from "@/lib/users/types";
-import { UsersDirectoryModern } from "./users-directory-modern";
+import type { UserRoleKey, UsersDirectoryData } from "@/lib/users/types";
+
+import { UsersDirectory } from "./users-directory";
 
 type Props = {
-  data: UsersDirectoryData;
+  data: UsersDirectoryData & {
+    canUpdate: boolean;
+    canDelete: boolean;
+    currentUserId: string;
+    currentRole: UserRoleKey;
+  };
 };
 
 export function UsersPage({ data }: Props) {
-  return <UsersDirectoryModern data={data} />;
+  return <UsersDirectory {...data} />;
 }
