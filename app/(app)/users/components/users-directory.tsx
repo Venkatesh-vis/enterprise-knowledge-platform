@@ -214,9 +214,7 @@ export function UsersDirectory({
     <div className="space-y-6">
       <header>
         <p className="text-sm font-medium text-slate-500">Organization</p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">
-          Users
-        </h1>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">Users</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
           Manage people, organization roles, and access for this workspace.
         </p>
@@ -229,32 +227,10 @@ export function UsersDirectory({
       ) : null}
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-medium text-slate-500">Total users</p>
-              <p className="mt-2 text-2xl font-semibold tabular-nums text-slate-950">{stats.total}</p>
-            </div>
-            <UsersRound className="h-5 w-5 text-slate-400" />
-          </div>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-medium text-slate-500">Administrators</p>
-              <p className="mt-2 text-2xl font-semibold tabular-nums text-slate-950">{stats.admins}</p>
-            </div>
-            <ShieldCheck className="h-5 w-5 text-slate-400" />
-          </div>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-xs font-medium text-slate-500">Managers</p>
-          <p className="mt-2 text-2xl font-semibold tabular-nums text-slate-950">{stats.managers}</p>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-xs font-medium text-slate-500">Members</p>
-          <p className="mt-2 text-2xl font-semibold tabular-nums text-slate-950">{stats.members}</p>
-        </div>
+        <StatCard label="Total users" value={stats.total} icon={UsersRound} />
+        <StatCard label="Administrators" value={stats.admins} icon={ShieldCheck} />
+        <StatCard label="Managers" value={stats.managers} icon={UsersRound} />
+        <StatCard label="Members" value={stats.members} icon={UsersRound} />
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -275,9 +251,7 @@ export function UsersDirectory({
                 className="h-11 pl-10"
               />
             </div>
-            <Button type="submit" variant="secondary" className="h-11" disabled={loading}>
-              Search
-            </Button>
+            <Button type="submit" variant="secondary" className="h-11" disabled={loading}>Search</Button>
           </form>
 
           <Select
@@ -290,9 +264,7 @@ export function UsersDirectory({
           />
         </div>
 
-        {loading ? (
-          <div className="px-5 py-3 text-xs text-slate-400">Updating users…</div>
-        ) : null}
+        {loading ? <div className="px-5 py-2 text-xs text-slate-400">Updating users…</div> : null}
 
         <UsersTable
           users={users}
@@ -306,15 +278,14 @@ export function UsersDirectory({
           onRemove={setRemovingUser}
         />
 
-        {pagination.totalPages > 1 ? (
-          <div className="border-t border-slate-100 px-5 py-4">
-            <Pagination
-              currentPage={pagination.page}
-              totalPages={pagination.totalPages}
-              onPageChange={handlePageChange}
-            />
-          </div>
-        ) : null}
+        <Pagination
+          page={pagination.page}
+          totalPages={pagination.totalPages}
+          totalItems={pagination.totalItems}
+          pageSize={pagination.pageSize}
+          itemLabel="users"
+          onPageChange={handlePageChange}
+        />
       </section>
 
       <UserFormDialog
@@ -337,6 +308,28 @@ export function UsersDirectory({
           if (removingUser) handleUserRemoved(removingUser.id);
         }}
       />
+    </div>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  icon: Icon,
+}: {
+  label: string;
+  value: number;
+  icon: typeof UsersRound;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-950/[0.02]">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-xs font-medium text-slate-500">{label}</p>
+          <p className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 tabular-nums">{value}</p>
+        </div>
+        <Icon className="h-5 w-5 text-slate-400" />
+      </div>
     </div>
   );
 }
