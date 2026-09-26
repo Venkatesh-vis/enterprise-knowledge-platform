@@ -2,7 +2,7 @@
 
 import { Pencil, UserRoundX } from "lucide-react";
 
-import { ActionMenu } from "@/app/shared/ui/action-menu";
+import { Button } from "@/app/shared/ui/button";
 import {
   Table,
   TableBody,
@@ -69,13 +69,13 @@ export function UsersTable({
 
   return (
     <TableScroll>
-      <Table className="min-w-[760px]">
+      <Table className="min-w-[860px]">
         <TableHeader>
           <tr>
             <TableHead>User</TableHead>
             <TableHead>Role</TableHead>
             <TableHead>Joined</TableHead>
-            <TableHead className="w-16 text-right">Actions</TableHead>
+            <TableHead className="min-w-[180px] text-right">Actions</TableHead>
           </tr>
         </TableHeader>
         <TableBody>
@@ -83,26 +83,6 @@ export function UsersTable({
             const isSelf = user.id === currentUserId;
             const isMutating = mutationId === user.id;
             const manageable = canManageTarget(currentUserRole, user.roleKey);
-            const items = [];
-
-            if (canUpdate && !isSelf && manageable) {
-              items.push({
-                label: isMutating ? "Updating…" : "Change role",
-                icon: Pencil,
-                disabled: isMutating,
-                onSelect: () => onChangeRole(user),
-              });
-            }
-
-            if (canDelete && !isSelf && manageable) {
-              items.push({
-                label: "Remove user",
-                icon: UserRoundX,
-                danger: true,
-                disabled: isMutating,
-                onSelect: () => onRemove(user),
-              });
-            }
 
             return (
               <TableRow key={user.id}>
@@ -112,37 +92,45 @@ export function UsersTable({
                       {initials(user.name)}
                     </div>
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-slate-950">
-                        {user.name}
-                      </p>
-                      <p className="truncate text-xs text-slate-500">
-                        {user.email}
-                      </p>
+                      <p className="truncate text-sm font-semibold text-slate-950">{user.name}</p>
+                      <p className="truncate text-xs text-slate-500">{user.email}</p>
                     </div>
                   </div>
                 </TableCell>
-                <TableCell>
-                  <RoleBadge role={user.roleKey} />
-                </TableCell>
+                <TableCell><RoleBadge role={user.roleKey} /></TableCell>
                 <TableCell className="whitespace-nowrap text-sm text-slate-500">
                   {formatDate(user.joinedAt)}
                 </TableCell>
                 <TableCell className="text-right">
-                  <ActionMenu
-                    label={`Actions for ${user.name}`}
-                    items={
-                      items.length
-                        ? items
-                        : [
-                            {
-                              label: isSelf
-                                ? "Your account"
-                                : "No actions available",
-                              disabled: true,
-                            },
-                          ]
-                    }
-                  />
+                  <div className="flex items-center justify-end gap-1.5">
+                    {canUpdate && !isSelf && manageable && (
+                      <Button
+                        variant="ghost"
+                        disabled={isMutating}
+                        onClick={() => onChangeRole(user)}
+                        className="h-9 px-2.5 text-xs"
+                      >
+                        <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                        {isMutating ? "Updating…" : "Change role"}
+                      </Button>
+                    )}
+                    {canDelete && !isSelf && manageable && (
+                      <Button
+                        variant="ghost"
+                        disabled={isMutating}
+                        onClick={() => onRemove(user)}
+                        className="h-9 px-2.5 text-xs text-red-600 hover:bg-red-50"
+                      >
+                        <UserRoundX className="mr-1.5 h-3.5 w-3.5" />
+                        Remove
+                      </Button>
+                    )}
+                    {isSelf && (
+                      <span className="px-2.5 text-xs font-medium text-slate-400">
+                        Current user
+                      </span>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             );
