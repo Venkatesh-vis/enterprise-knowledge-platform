@@ -23,6 +23,7 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-hook-form": "^7.87.0",
+    "razorpay": "^2.9.6",
     "sequelize": "^6.37.8",
     "zustand": "^5.0.15"
   },
