@@ -10,7 +10,7 @@ import { Select } from "@/app/shared/ui/select";
 import type { UserListItem, UsersDirectoryData } from "@/lib/users/types";
 import { UserFormDialog } from "./user-form-dialog";
 import { UserRemoveDialog } from "./user-remove-dialog";
-import { UsersTable } from "./users-table-actions";
+import { UsersTable } from "./users-table";
 
 type Props = UsersDirectoryData & { canUpdate: boolean; canDelete: boolean; currentUserId: string; currentRole: string };
 type UsersResponse = { success: boolean; message?: string; data: UsersDirectoryData };
