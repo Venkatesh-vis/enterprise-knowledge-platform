@@ -1,118 +1,110 @@
-"use client";
+import { Download, ExternalLink, FileText } from "lucide-react";
 
-import { useEffect, useMemo, useState } from "react";
-import { Check, Sparkles } from "lucide-react";
-import { motion } from "framer-motion";
-import { apiRequest } from "@/app/shared/lib/api";
-import { PricingCard } from "./pricing-card";
-import { BillingSummary } from "./billing-summary";
-import { BillingInvoices, type BillingInvoiceItem } from "./billing-invoices";
+import { getBillingInvoicesPageData } from "@/lib/billing/service";
 
-export type PlanId = "starter" | "business" | "enterprise";
-export type BillingCycle = "monthly" | "yearly";
-export interface PlanFeature { name: string; included: boolean; }
-export interface PlanLimit { label: string; value: string; }
-export interface Plan { id: PlanId; name: string; description: string; monthlyPrice: number; yearlyPrice: number; popular?: boolean; limits: PlanLimit[]; features: PlanFeature[]; }
-
-type BillingResponse = {
-  organization: { planKey: PlanId; billingCycle: BillingCycle; subscriptionStatus: string };
-  razorpayKeyId: string;
-  invoices: BillingInvoiceItem[];
-};
-
-type WindowWithRazorpay = Window & { Razorpay?: new (options: Record<string, unknown>) => { open: () => void } };
-
-const commonFeatures = ["Knowledge workspace", "Document management", "AI assistant", "Standard RBAC", "Advanced RBAC", "Audit logs", "Advanced analytics", "Priority support"];
-const plans: Plan[] = [
-  { id: "starter", name: "Starter", description: "For small teams getting started with centralized knowledge.", monthlyPrice: 999, yearlyPrice: 9590, limits: [{ label: "Users", value: "10" }, { label: "Storage", value: "25 GB" }, { label: "Knowledge bases", value: "5" }, { label: "Usage credits", value: "1,000 / month" }], features: commonFeatures.map((name) => ({ name, included: ["Knowledge workspace", "Document management", "AI assistant", "Standard RBAC"].includes(name) })) },
-  { id: "business", name: "Business", description: "For growing organizations that need advanced controls and collaboration.", monthlyPrice: 2999, yearlyPrice: 28790, popular: true, limits: [{ label: "Users", value: "50" }, { label: "Storage", value: "100 GB" }, { label: "Knowledge bases", value: "20" }, { label: "Usage credits", value: "10,000 / month" }], features: commonFeatures.map((name) => ({ name, included: true })) },
-  { id: "enterprise", name: "Enterprise", description: "For organizations requiring maximum control, security and scale.", monthlyPrice: 7999, yearlyPrice: 76790, limits: [{ label: "Users", value: "250" }, { label: "Storage", value: "500 GB" }, { label: "Knowledge bases", value: "100" }, { label: "Usage credits", value: "50,000 / month" }], features: commonFeatures.map((name) => ({ name, included: true })) },
-];
-
-function loadRazorpay() {
-  return new Promise<boolean>((resolve) => {
-    if ((window as WindowWithRazorpay).Razorpay) return resolve(true);
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.async = true;
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.body.appendChild(script);
+function formatDate(value: string | null) {
+  if (!value) return "—";
+  return new Date(value).toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
   });
 }
 
-export function BillingPage() {
-  const [selectedPlan, setSelectedPlan] = useState<PlanId>("business");
-  const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
-  const [billing, setBilling] = useState<BillingResponse | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState("");
-  const [error, setError] = useState("");
+function formatAmount(value: number | string, currency: string) {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 2,
+  }).format(Number(value) / 100);
+}
 
-  useEffect(() => {
-    apiRequest<{ success: boolean; data: BillingResponse }>({ path: "/api/billing" })
-      .then((response) => {
-        setBilling(response.data);
-        setSelectedPlan(response.data.organization.planKey);
-        setBillingCycle(response.data.organization.billingCycle);
-      })
-      .catch(() => setError("Unable to load current billing details."));
-  }, []);
+function statusClass(status: string) {
+  const value = status.toLowerCase();
+  if (["paid", "captured", "authorized"].includes(value)) return "bg-emerald-50 text-emerald-700";
+  if (["issued", "created"].includes(value)) return "bg-amber-50 text-amber-700";
+  return "bg-slate-100 text-slate-600";
+}
 
-  const selected = useMemo(() => plans.find((plan) => plan.id === selectedPlan) ?? plans[1], [selectedPlan]);
-
-  async function continueToCheckout() {
-    setBusy(true); setError(""); setNotice("");
-    try {
-      if (!(await loadRazorpay())) throw new Error("Razorpay Checkout could not be loaded.");
-      const response = await apiRequest<{ success: boolean; data: { keyId: string; subscriptionId: string; planName: string; customer: { name: string; email: string } } }>({ path: "/api/billing", method: "POST", body: { plan: selectedPlan, billingCycle } });
-      const Razorpay = (window as WindowWithRazorpay).Razorpay;
-      if (!Razorpay) throw new Error("Razorpay Checkout is unavailable.");
-      const checkout = new Razorpay({
-        key: response.data.keyId,
-        subscription_id: response.data.subscriptionId,
-        name: "Enterprise Knowledge Platform",
-        description: `${response.data.planName} plan (${billingCycle})`,
-        prefill: { name: response.data.customer.name, email: response.data.customer.email },
-        theme: { color: "#0f172a" },
-        modal: { ondismiss: () => setBusy(false) },
-        handler: async (payment: { razorpay_subscription_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
-          try {
-            await apiRequest({ path: "/api/billing/verify", method: "POST", body: { subscriptionId: payment.razorpay_subscription_id, paymentId: payment.razorpay_payment_id, signature: payment.razorpay_signature } });
-            setNotice("Payment verified. Your plan is now being activated.");
-            setBilling((current) => current ? { ...current, organization: { ...current.organization, planKey: selectedPlan, billingCycle, subscriptionStatus: "ACTIVE" } } : current);
-          } catch (verificationError) {
-            setError(verificationError instanceof Error ? verificationError.message : "Payment verification failed. The webhook will reconcile the payment if it was successful.");
-          } finally { setBusy(false); }
-        },
-      });
-      checkout.open();
-    } catch (checkoutError) {
-      setError(checkoutError instanceof Error ? checkoutError.message : "Unable to start checkout.");
-      setBusy(false);
-    }
-  }
+export async function BillingPage() {
+  const { organization, invoices } = await getBillingInvoicesPageData();
 
   return (
-    <main className="min-h-screen bg-slate-50">
-      <section id="pricing" className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-        <div className="flex flex-col items-center">
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Plans & Billing</h1>
-          <p className="mt-2 text-sm text-slate-500">Choose a plan for your organization. Payment and entitlements are verified on the server.</p>
-          <div role="group" aria-label="Billing cycle" className="relative mt-6 inline-flex w-[220px] items-center rounded-full border border-slate-200 bg-white p-1 shadow-sm">
-            <motion.div layout className="absolute inset-y-1 w-[calc(50%-4px)] rounded-full bg-slate-950" style={{ left: billingCycle === "monthly" ? "4px" : "50%" }} />
-            <button type="button" onClick={() => setBillingCycle("monthly")} aria-pressed={billingCycle === "monthly"} className={`relative z-10 flex-1 rounded-full px-5 py-2 text-sm font-medium ${billingCycle === "monthly" ? "text-white" : "text-slate-500"}`}>Monthly</button>
-            <button type="button" onClick={() => setBillingCycle("yearly")} aria-pressed={billingCycle === "yearly"} className={`relative z-10 flex-1 rounded-full px-5 py-2 text-sm font-medium ${billingCycle === "yearly" ? "text-white" : "text-slate-500"}`}>Yearly</button>
+    <div className="space-y-8">
+      <header className="border-b border-slate-200 pb-6">
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Management</p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">Billing</h1>
+        <p className="mt-2 text-sm leading-6 text-slate-500">
+          View invoice details and download payment records for {organization.name}.
+        </p>
+      </header>
+
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-100 p-6">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-950">Invoice history</h2>
+              <p className="mt-1 text-sm text-slate-500">Detailed invoices and protected downloads.</p>
+            </div>
+            <span className="text-xs font-medium text-slate-400">
+              {invoices.length} {invoices.length === 1 ? "invoice" : "invoices"}
+            </span>
           </div>
         </div>
-        {(notice || error) && <div className={`mx-auto mt-6 max-w-3xl rounded-xl px-4 py-3 text-sm ${error ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{error || notice}</div>}
-        <div className="mt-8 grid items-stretch gap-6 lg:grid-cols-3">{plans.map((plan) => <PricingCard key={plan.id} plan={plan} selected={selectedPlan === plan.id} billingCycle={billingCycle} yearlyDiscount={20} onSelect={() => setSelectedPlan(plan.id)} />)}</div>
+
+        {invoices.length === 0 ? (
+          <div className="p-10 text-center">
+            <FileText className="mx-auto h-8 w-8 text-slate-300" />
+            <p className="mt-3 text-sm font-medium text-slate-700">No invoices yet</p>
+            <p className="mt-1 text-sm text-slate-400">Invoices will appear here after a Razorpay payment is issued.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {invoices.map((invoice) => (
+              <article key={invoice.id} className="p-6">
+                <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-sm font-semibold text-slate-950">
+                        {invoice.invoiceNumber ?? invoice.razorpayInvoiceId}
+                      </h3>
+                      <span className={`rounded-full px-2 py-1 text-[11px] font-semibold capitalize ${statusClass(invoice.status)}`}>
+                        {invoice.status.toLowerCase()}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-400">Razorpay invoice: {invoice.razorpayInvoiceId}</p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="text-base font-semibold text-slate-950">
+                      {formatAmount(invoice.amountPaise, invoice.currency)}
+                    </span>
+                    {invoice.hostedUrl && (
+                      <a href={invoice.hostedUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                        <ExternalLink className="h-3.5 w-3.5" /> Razorpay invoice
+                      </a>
+                    )}
+                    <a href={`/api/billing/invoices/${invoice.id}?download=1`} className="inline-flex items-center gap-1.5 rounded-lg bg-slate-950 px-3 py-2 text-xs font-medium text-white hover:bg-indigo-700">
+                      <Download className="h-3.5 w-3.5" /> Download
+                    </a>
+                  </div>
+                </div>
+
+                <dl className="mt-6 grid gap-4 border-t border-slate-100 pt-5 sm:grid-cols-2 xl:grid-cols-4">
+                  <div><dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Invoice date</dt><dd className="mt-1 text-sm font-medium text-slate-700">{formatDate(invoice.issuedAt ?? invoice.createdAt)}</dd></div>
+                  <div><dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Paid date</dt><dd className="mt-1 text-sm font-medium text-slate-700">{formatDate(invoice.paidAt)}</dd></div>
+                  <div><dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Plan</dt><dd className="mt-1 text-sm font-medium capitalize text-slate-700">{invoice.details?.planKey ?? "—"}{invoice.details?.billingCycle ? ` · ${invoice.details.billingCycle}` : ""}</dd></div>
+                  <div><dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Payment</dt><dd className="mt-1 truncate text-sm font-medium text-slate-700">{invoice.paymentId ?? "Pending"}</dd></div>
+                  <div><dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Billed to</dt><dd className="mt-1 text-sm font-medium text-slate-700">{invoice.customerName}</dd></div>
+                  <div><dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Customer email</dt><dd className="mt-1 truncate text-sm font-medium text-slate-700">{invoice.customerEmail}</dd></div>
+                  <div><dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Amount paid</dt><dd className="mt-1 text-sm font-medium text-slate-700">{formatAmount(invoice.amountPaidPaise, invoice.currency)}</dd></div>
+                  <div><dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Currency</dt><dd className="mt-1 text-sm font-medium text-slate-700">{invoice.currency}</dd></div>
+                </dl>
+              </article>
+            ))}
+          </div>
+        )}
       </section>
-
-      <section className="mx-auto max-w-7xl px-4 pb-12 sm:px-6 lg:px-8"><div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8"><div className="flex gap-5"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600"><Sparkles className="h-5 w-5" /></div><div><h2 className="text-base font-semibold text-slate-950">Predictable plan entitlements</h2><p className="mt-1.5 max-w-3xl text-sm leading-6 text-slate-500">Limits are enforced server-side for users, storage and feature access. A downgrade is rejected when current usage would exceed the target plan.</p><div className="mt-4 flex flex-wrap gap-5 text-sm text-slate-600"><span className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-600" />Server-side enforcement</span><span className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-600" />Webhook reconciliation</span><span className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-600" />Invoice history</span></div></div></div></div></section>
-
-      <BillingInvoices invoices={billing?.invoices ?? []} />
-      <BillingSummary plan={selected} billingCycle={billingCycle} yearlyDiscount={20} busy={busy} currentPlan={billing?.organization.planKey === selectedPlan && billing?.organization.billingCycle === billingCycle} onContinue={continueToCheckout} />
-    </main>
+    </div>
   );
 }
