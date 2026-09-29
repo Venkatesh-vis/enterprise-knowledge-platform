@@ -20,7 +20,7 @@ const workspaceItems: NavigationItem[] = [
 ];
 
 const managementItems: NavigationItem[] = [
-  { label: "Billing", href: "/billing", icon: CreditCard, permission: "BILLING_READ", disabled: true },
+  { label: "Billing", href: "/billing", icon: CreditCard, permission: "BILLING_READ" },
   { label: "Security", href: "/security", icon: ShieldCheck, permission: "SECURITY_READ", disabled: true },
   { label: "History", href: "/history", icon: History, permission: "AUDIT_LOG_READ" },
   { label: "Settings", href: "/settings", icon: Settings, permission: "ORGANIZATION_SETTINGS_READ" },
