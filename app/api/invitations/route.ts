@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { requirePermission } from "@/lib/auth/authorization";
+import { assertCanAddUsers, PlanLimitError } from "@/lib/billing/limits";
 import { errorResponse } from "@/lib/http/api-error";
 import { createInvitation, getInvitationPageData } from "@/lib/invitations/service";
 import { createInvitationSchema, invitationListQuerySchema } from "@/lib/invitations/validation";
@@ -23,13 +25,12 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const input = createInvitationSchema.parse(await request.json());
+    const auth = await requirePermission("INVITATION_CREATE");
+    await assertCanAddUsers(auth.organization.id);
     const result = await createInvitation(input);
-    return NextResponse.json({
-      success: true,
-      message: result.emailSent ? "Invitation sent." : "Invitation created, but email delivery failed. You can resend it.",
-      data: result,
-    }, { status: 201 });
+    return NextResponse.json({ success: true, message: result.emailSent ? "Invitation sent." : "Invitation created, but email delivery failed. You can resend it.", data: result }, { status: 201 });
   } catch (error) {
+    if (error instanceof PlanLimitError) return NextResponse.json({ success: false, message: error.message }, { status: error.status });
     return errorResponse(error, "Create invitation API");
   }
 }
