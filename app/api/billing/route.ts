@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { BillingServiceError, createSubscription, getBillingPageData } from "@/lib/billing/service";
+import { RazorpayApiError } from "@/lib/billing/razorpay";
 
 export const runtime = "nodejs";
 
@@ -8,6 +9,16 @@ function errorResponse(error: unknown) {
   if (error instanceof BillingServiceError) {
     return NextResponse.json({ success: false, message: error.message }, { status: error.status });
   }
+
+  if (error instanceof RazorpayApiError) {
+    console.error("Razorpay billing error:", {
+      code: error.code,
+      status: error.status,
+      message: error.message,
+    });
+    return NextResponse.json({ success: false, message: error.message }, { status: error.status >= 500 ? 500 : 502 });
+  }
+
   console.error("Billing API error:", error);
   return NextResponse.json({ success: false, message: "Unable to process billing request." }, { status: 500 });
 }
