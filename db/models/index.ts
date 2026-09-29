@@ -7,6 +7,9 @@ import Permission from "./permission";
 import RolePermission from "./role-permission";
 import AuditLog from "./audit-log";
 import Invitation from "./invitation";
+import BillingSubscription from "./billing-subscription";
+import BillingInvoice from "./billing-invoice";
+import BillingWebhookEvent from "./billing-webhook-event";
 
 User.hasMany(OrganizationMembership, { foreignKey: "userId", as: "memberships" });
 Organization.hasMany(OrganizationMembership, { foreignKey: "organizationId", as: "memberships" });
@@ -25,11 +28,15 @@ AuditLog.belongsTo(User, { foreignKey: "targetUserId", as: "targetUser" });
 AuditLog.belongsTo(Organization, { foreignKey: "organizationId", as: "organization" });
 User.hasMany(AuditLog, { foreignKey: "actorUserId", as: "auditLogs" });
 Organization.hasMany(AuditLog, { foreignKey: "organizationId", as: "auditLogs" });
-
 Invitation.belongsTo(Organization, { foreignKey: "organizationId", as: "organization" });
 Invitation.belongsTo(User, { foreignKey: "invitedByUserId", as: "invitedBy" });
 Invitation.belongsTo(Role, { foreignKey: "roleId", as: "role" });
 Organization.hasMany(Invitation, { foreignKey: "organizationId", as: "invitations" });
+
+Organization.hasMany(BillingSubscription, { foreignKey: "organizationId", as: "billingSubscriptions" });
+BillingSubscription.belongsTo(Organization, { foreignKey: "organizationId", as: "organization" });
+Organization.hasMany(BillingInvoice, { foreignKey: "organizationId", as: "billingInvoices" });
+BillingInvoice.belongsTo(Organization, { foreignKey: "organizationId", as: "organization" });
 
 export {
   User,
@@ -41,4 +48,7 @@ export {
   RolePermission,
   AuditLog,
   Invitation,
+  BillingSubscription,
+  BillingInvoice,
+  BillingWebhookEvent,
 };
