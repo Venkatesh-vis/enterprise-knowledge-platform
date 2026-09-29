@@ -4,6 +4,18 @@ import { createHmac, timingSafeEqual } from "crypto";
 
 const RAZORPAY_BASE_URL = "https://api.razorpay.com/v1";
 
+export class RazorpayApiError extends Error {
+  readonly status: number;
+  readonly code: string | null;
+
+  constructor(message: string, status: number, code?: string | null) {
+    super(message);
+    this.name = "RazorpayApiError";
+    this.status = status;
+    this.code = code ?? null;
+  }
+}
+
 function getCredentials() {
   const keyId = process.env.RAZORPAY_KEY_ID;
   const keySecret = process.env.RAZORPAY_KEY_SECRET;
@@ -19,21 +31,17 @@ function authHeader() {
 async function razorpayRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${RAZORPAY_BASE_URL}${path}`, {
     ...init,
-    headers: {
-      Authorization: authHeader(),
-      "Content-Type": "application/json",
-      ...(init.headers ?? {}),
-    },
+    headers: { Authorization: authHeader(), "Content-Type": "application/json", ...(init.headers ?? {}) },
     cache: "no-store",
   });
   const body = await response.text();
   let data: unknown = null;
   try { data = body ? JSON.parse(body) : null; } catch { data = body; }
   if (!response.ok) {
-    const message = typeof data === "object" && data && "error" in data
-      ? String((data as { error?: { description?: string } }).error?.description ?? "Razorpay request failed.")
-      : "Razorpay request failed.";
-    throw new Error(message);
+    const error = typeof data === "object" && data && "error" in data
+      ? (data as { error?: { description?: string; code?: string } }).error
+      : undefined;
+    throw new RazorpayApiError(error?.description ?? "Razorpay request failed.", response.status, error?.code);
   }
   return data as T;
 }
@@ -64,10 +72,29 @@ export type RazorpayInvoice = {
 };
 
 export async function createRazorpaySubscription(input: { planId: string; totalCount: number; notes: Record<string, string> }) {
-  return razorpayRequest<RazorpaySubscription>("/subscriptions", {
-    method: "POST",
-    body: JSON.stringify({ plan_id: input.planId, total_count: input.totalCount, quantity: 1, customer_notify: true, notes: input.notes }),
-  });
+  if (!/^plan_[A-Za-z0-9]+$/.test(input.planId)) {
+    throw new RazorpayApiError(
+      "Invalid Razorpay plan ID. Each RAZORPAY_PLAN_* environment variable must contain a real Razorpay Plan ID beginning with plan_. Create the matching plan in the same Razorpay account and mode as RAZORPAY_KEY_ID.",
+      500,
+      "INVALID_PLAN_ID",
+    );
+  }
+
+  try {
+    return await razorpayRequest<RazorpaySubscription>("/subscriptions", {
+      method: "POST",
+      body: JSON.stringify({ plan_id: input.planId, total_count: input.totalCount, quantity: 1, customer_notify: true, notes: input.notes }),
+    });
+  } catch (error) {
+    if (error instanceof RazorpayApiError && error.status === 400 && /id provided is invalid|could not be found/i.test(error.message)) {
+      throw new RazorpayApiError(
+        `Razorpay could not find plan ${input.planId}. Check that this is an actual Plan ID from the same Razorpay account and mode (Test/Live) as RAZORPAY_KEY_ID.`,
+        500,
+        "INVALID_RAZORPAY_PLAN",
+      );
+    }
+    throw error;
+  }
 }
 
 export async function fetchRazorpaySubscription(subscriptionId: string) {
