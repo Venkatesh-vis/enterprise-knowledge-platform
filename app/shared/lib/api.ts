@@ -3,14 +3,9 @@ import { redirect } from "next/navigation";
 
 import { useAuthStore } from "@/app/shared/store/auth-store";
 
-const api = axios.create({
-  headers: {
-    "Content-Type":
-      "application/json",
-  },
-});
+const api = axios.create();
 
-interface ApiRequestOptions {
+type ApiRequestOptions = {
   path: string;
   method?:
     | "GET"
@@ -19,7 +14,7 @@ interface ApiRequestOptions {
     | "PATCH"
     | "DELETE";
   body?: unknown;
-}
+};
 
 export async function apiRequest<T>({
   path,
@@ -27,27 +22,39 @@ export async function apiRequest<T>({
   body,
 }: ApiRequestOptions): Promise<T> {
   try {
-    const response =
-      await api.request<T>({
-        url: path,
-        method,
-        data: body,
-      });
+    const isFormData =
+      typeof FormData !== "undefined" &&
+      body instanceof FormData;
+
+    const response = await api.request<T>({
+      url: path,
+      method,
+      data: body,
+      headers: isFormData
+        ? undefined
+        : {
+            "Content-Type": "application/json",
+          },
+    });
 
     return response.data;
   } catch (error) {
     if (
-      typeof window !==
-        "undefined" &&
+      typeof window !== "undefined" &&
       axios.isAxiosError(error) &&
-      error.response?.status ===
-        401
+      error.response?.status === 401
     ) {
-      useAuthStore
-        .getState()
-        .clearAuth();
-
+      useAuthStore.getState().clearAuth();
       redirect("/login");
+    }
+
+    if (
+      axios.isAxiosError(error) &&
+      error.response?.data?.message
+    ) {
+      throw new Error(
+        String(error.response.data.message),
+      );
     }
 
     throw error;

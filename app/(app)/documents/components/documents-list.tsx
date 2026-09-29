@@ -1,4 +1,9 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
 import { EmptyState } from "../../../shared/ui/empty-state";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableScroll } from "../../../shared/ui/table";
 
 import { DocumentRow } from "./document-row";
 
@@ -12,39 +17,65 @@ type Document = {
   uploadedBy: string;
 };
 
-export function DocumentsList({
-  documents,
-}: {
-  documents: Document[];
-}) {
-  if (documents.length === 0) {
-    return (
-      <EmptyState
-        title="No documents found"
-        description="Try adjusting your search or filters."
-      />
-    );
+export function DocumentsList({ documents }: { documents: Document[] }) {
+  const [items, setItems] = useState(documents);
+  const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
+
+  useEffect(() => setItems(documents), [documents]);
+
+  useEffect(() => {
+    if (!selectedDocumentId) return;
+
+    function close(event: PointerEvent) {
+      const target = event.target;
+      if (target instanceof Element && target.closest("[data-document-actions]")) return;
+      setSelectedDocumentId(null);
+    }
+
+    function escape(event: KeyboardEvent) {
+      if (event.key === "Escape") setSelectedDocumentId(null);
+    }
+
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [selectedDocumentId]);
+
+  if (items.length === 0) {
+    return <EmptyState title="No documents found" description="Try adjusting your search or filters." />;
   }
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      {/* Table header */}
-      <div className="hidden grid-cols-[minmax(0,2fr)_100px_120px_150px_44px] gap-4 border-b border-slate-100 bg-slate-50 px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400 lg:grid">
-        <span>Document</span>
-        <span>Type</span>
-        <span>Status</span>
-        <span>Updated</span>
-        <span />
-      </div>
-
-      <div className="divide-y divide-slate-100">
-        {documents.map((document) => (
-          <DocumentRow
-            key={document.id}
-            document={document}
-          />
-        ))}
-      </div>
-    </section>
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <TableScroll>
+        <Table className="min-w-[900px]">
+          <TableHeader>
+            <tr>
+              <TableHead>Document</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Uploaded by</TableHead>
+              <TableHead>Updated</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </tr>
+          </TableHeader>
+          <TableBody>
+            {items.map((document) => (
+              <DocumentRow
+                key={document.id}
+                document={document}
+                selected={selectedDocumentId === document.id}
+                onSelect={() => setSelectedDocumentId(document.id)}
+                onClose={() => setSelectedDocumentId(null)}
+                onDeleted={(id) => setItems((current) => current.filter((item) => item.id !== id))}
+              />
+            ))}
+          </TableBody>
+        </Table>
+      </TableScroll>
+    </div>
   );
 }
