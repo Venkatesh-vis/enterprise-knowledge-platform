@@ -16,39 +16,25 @@ Set these in the deployment environment. Do not commit them.
 - `RAZORPAY_PLAN_ENTERPRISE_MONTHLY`
 - `RAZORPAY_PLAN_ENTERPRISE_YEARLY`
 
-The six `RAZORPAY_PLAN_*` values are Razorpay Plan IDs created in the Razorpay dashboard/API. Their amounts must match the server-side prices in `lib/billing/plans.ts`.
+The six `RAZORPAY_PLAN_*` values are Razorpay Plan IDs. Their configured amounts must match the server-side prices in `lib/billing/plans.ts`.
 
 ## Webhook
 
-Configure Razorpay to POST to:
-
-`/api/billing/webhook`
-
-Use a public HTTPS URL. Configure at least:
-
-- `subscription.activated`
-- `subscription.charged`
-- `subscription.resumed`
-- `subscription.paused`
-- `subscription.cancelled`
-- `subscription.halted`
-- `payment.authorized`
-- `payment.failed`
-
-The webhook signature is verified against the raw request body before processing. Event IDs are persisted so duplicate deliveries are idempotent.
+Configure Razorpay to POST to `/api/billing/webhook` on a public HTTPS endpoint. Configure subscription activation/charge/resume/pause/cancel/halt and payment authorization/failure events. The webhook signature is verified against the raw request body and event IDs are persisted for idempotency.
 
 ## Database
 
-Run the normal Sequelize migrations after deploying this branch. Existing organizations are given a 14-day Starter trial by the billing migration.
+Run the normal Sequelize migrations after deploying this branch. Existing organizations receive a 14-day Starter trial.
 
 ## Billing behavior
 
-- Plan and billing-cycle prices are authoritative on the server.
-- Client-submitted prices are never trusted.
+- Prices and entitlements are authoritative on the server.
+- Checkout never accepts a client-supplied amount.
 - Subscription signatures are verified server-side.
-- Webhooks reconcile subscription state asynchronously.
+- Webhooks reconcile state asynchronously.
 - Downgrades are rejected when current user/storage usage exceeds the target plan.
-- User invitations are blocked at the server when the organization reaches its user limit.
-- Advanced RBAC role changes are gated by plan entitlement.
-- Invoice records are stored per organization and can be downloaded from the protected billing page.
-- Razorpay's subscription flow is configured for a finite subscription count: 120 monthly cycles or 10 yearly cycles. This stays within Razorpay's documented subscription lifetime constraints and should be reviewed if the product later requires a different renewal model.
+- User invitations are blocked when the user limit is reached.
+- Advanced RBAC role changes are gated by plan.
+- Invoice records are stored per organization and protected by billing authorization.
+- Invoice downloads are generated from stored invoice details; the Razorpay hosted invoice is also available when supplied.
+- Monthly subscriptions are configured for 120 cycles and yearly subscriptions for 10 cycles.
