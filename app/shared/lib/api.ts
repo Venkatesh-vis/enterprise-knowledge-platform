@@ -3,7 +3,9 @@ import { redirect } from "next/navigation";
 
 import { useAuthStore } from "@/app/shared/store/auth-store";
 
-const api = axios.create();
+const api = axios.create({
+  withCredentials: true,
+});
 
 type ApiRequestOptions = {
   path: string;
@@ -48,15 +50,8 @@ export async function apiRequest<T>({
       redirect("/login");
     }
 
-    if (
-      axios.isAxiosError(error) &&
-      error.response?.data?.message
-    ) {
-      throw new Error(
-        String(error.response.data.message),
-      );
-    }
-
+    // Preserve the original Axios error so callers can inspect the
+    // server status and response body instead of receiving a generic Error.
     throw error;
   }
 }
