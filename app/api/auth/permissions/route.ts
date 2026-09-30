@@ -1,104 +1,42 @@
 import { NextResponse } from "next/server";
+import { getAuthenticatedRequest } from "@/lib/auth";
+import { Permission, RolePermission } from "@/db/models";
 
-import {requireAuth,} from "@/lib/auth/authorization";
-import {getRolePermissions,} from "@/lib/auth/get-permissions";
-
-
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const auth = await requireAuth();
+    const auth = await getAuthenticatedRequest(request);
 
-    const roleId = auth.membership.id;
-
-    const membership =
-      await import(
-        "@/db/models/organization-membership"
-      ).then(
-        ({ default: Model }) =>
-          Model.findByPk(
-            roleId,
-            {
-              attributes: [
-                "roleId",
-              ],
-              raw: true,
-            },
-          ),
-      );
-
-    if (!membership) {
+    if (!auth?.membership?.roleId) {
       return NextResponse.json(
-        {
-          success: false,
-          message:
-            "Membership not found.",
-        },
-        {
-          status: 403,
-        },
+        { message: "User role is not configured." },
+        { status: 403 },
       );
     }
 
-    const permissions =
-      await getRolePermissions(
-        membership.roleId,
-      );
+    const roleId = auth.membership.roleId;
 
-    return NextResponse.json(
-      {
-        success: true,
-        message:
-          "Current permissions.",
-        data: {
-          permissions,
+    const rolePermissions = await RolePermission.findAll({
+      where: { roleId },
+      include: [
+        {
+          model: Permission,
+          as: "permission",
+          attributes: ["key"],
         },
-      },
-      {
-        status: 200,
-        headers: {
-          "Cache-Control":
-            "no-store",
-        },
-      },
-    );
+      ],
+    });
+
+    const permissions = rolePermissions
+      .map((item: any) => item.permission?.key)
+      .filter(Boolean);
+
+    return NextResponse.json({ permissions });
   } catch (error) {
-    if (
-      error instanceof Error &&
-      "status" in error
-    ) {
-      const status =
-        (error as Error & {
-          status: number;
-        }).status;
-
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            status === 401
-              ? "Not authenticated."
-              : "Forbidden.",
-        },
-        {
-          status,
-        },
-      );
-    }
-
-    console.error(
-      "Permissions error:",
-      error,
-    );
+    console.error("Permissions error:", error);
 
     return NextResponse.json(
-      {
-        success: false,
-        message:
-          "Unable to load permissions.",
-      },
-      {
-        status: 500,
-      },
+      { message: "Unable to load permissions." },
+      { status: 401 },
     );
   }
 }
