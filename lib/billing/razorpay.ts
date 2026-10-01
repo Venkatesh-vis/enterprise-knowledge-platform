@@ -40,6 +40,11 @@ export const RazorpayService = {
   updateSubscription: (id: string, body: unknown) => call<RazorpayResponse>(`/subscriptions/${encodeURIComponent(id)}`, "PATCH", body),
   fetchInvoice: (id: string) => call<RazorpayResponse>(`/invoices/${encodeURIComponent(id)}`, "GET"),
   fetchPayment: (id: string) => call<RazorpayResponse>(`/payments/${encodeURIComponent(id)}`, "GET"),
+  fetchSubscriptionInvoices: (subscriptionId: string, skip = 0, count = 100) =>
+    call<RazorpayResponse>(
+      "/invoices?subscription_id=" + encodeURIComponent(subscriptionId) + "&skip=" + skip + "&count=" + count,
+      "GET",
+    ),
   cancelSubscription: (id: string, cancelAtCycleEnd: boolean) => call<RazorpayResponse>(`/subscriptions/${encodeURIComponent(id)}/cancel`, "POST", { cancel_at_cycle_end: cancelAtCycleEnd ? 1 : 0 }),
   refundPayment: (paymentId: string, amount?: number) => call<RazorpayResponse>(`/payments/${encodeURIComponent(paymentId)}/refund`, "POST", amount === undefined ? undefined : { amount }),
 
