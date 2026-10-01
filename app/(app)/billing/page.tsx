@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
-
 import { apiRequest } from "@/app/shared/lib/api";
 import { useAuthStore } from "@/app/shared/store/auth-store";
 import { useWorkspaceStore } from "@/app/shared/store/workspace-store";
