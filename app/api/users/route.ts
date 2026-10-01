@@ -58,7 +58,7 @@ function errorResponse(
   );
 }
 
-async function GET(
+async function handleGET(
   request: NextRequest,
 ) {
   try {
@@ -107,7 +107,7 @@ async function GET(
     return errorResponse(error);
   }
 }
-export const GET = withApiMiddleware(GET, {
+export const GET = withApiMiddleware(handleGET, {
   permission: "USER_READ",
   context: "GET app/api/users/route.ts API",
 });
