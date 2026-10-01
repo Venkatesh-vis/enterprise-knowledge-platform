@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentEntitlement, getBillingPayments } from "@/lib/billing/service";
+import { getCurrentEntitlement, getBillingPayments, syncCurrentSubscription } from "@/lib/billing/service";
 import { errorResponse } from "@/lib/http/api-error";
 
 export const runtime = "nodejs";
@@ -9,6 +9,10 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const from = url.searchParams.get("from") ?? undefined;
     const to = url.searchParams.get("to") ?? undefined;
+
+    await syncCurrentSubscription().catch((error) => {
+      console.error("Billing synchronization failed:", error);
+    });
 
     const [billing, payments] = await Promise.all([
       getCurrentEntitlement(),
