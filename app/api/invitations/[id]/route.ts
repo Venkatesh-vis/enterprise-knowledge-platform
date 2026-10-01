@@ -3,7 +3,7 @@ import { withApiMiddleware } from "@/lib/http/api-middleware";
 import { errorResponse } from "@/lib/http/api-error";
 import { getInvitationDetail } from "@/lib/invitations/service";
 
-async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
+async function handleGET(_request: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
     return NextResponse.json({ success: true, data: await getInvitationDetail(id) }, { headers: { "Cache-Control": "no-store" } });
@@ -12,7 +12,7 @@ async function GET(_request: Request, context: { params: Promise<{ id: string }>
   }
 }
 
-export const GET = withApiMiddleware(GET, {
+export const GET = withApiMiddleware(handleGET, {
   permission: "INVITATION_READ",
   context: "GET app/api/invitations/[id]/route.ts API",
 });
