@@ -14,6 +14,8 @@ import {
   UsageOverview,
   PricingPlans,
   InvoiceHistory,
+  BillingLoading,
+  BillingError,
 } from "./components";
 import type { Billing, BillingCycle, Plan } from "./components/billing-types";
 
@@ -55,12 +57,14 @@ export default function BillingPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState(false);
   const [message, setMessage] = useState("");
   const [invoiceFrom, setInvoiceFrom] = useState("");
   const [invoiceTo, setInvoiceTo] = useState("");
 
   const refresh = async (from = invoiceFrom, to = invoiceTo) => {
     setLoading(true);
+    setLoadError(false);
 
     try {
       const [planResponse, billingResponse] = await Promise.all([
@@ -81,6 +85,7 @@ export default function BillingPage() {
       setPlans(planResponse.data.plans);
       setBilling(billingResponse.data);
     } catch (cause) {
+      setLoadError(true);
       setError(cause instanceof Error ? cause.message : "Unable to load billing.");
     } finally {
       setLoading(false);
@@ -218,14 +223,11 @@ export default function BillingPage() {
   };
 
   if (loading || workspaceLoading) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="flex items-center gap-3 text-sm text-slate-500">
-          <Loader2 className="h-5 w-5 animate-spin" />
-          Loading your billing workspace…
-        </div>
-      </div>
-    );
+    return <BillingLoading />;
+  }
+
+  if (loadError && !billing) {
+    return <BillingError reset={() => void refresh("", "")} />;
   }
 
   return (
