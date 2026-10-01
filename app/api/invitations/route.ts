@@ -5,7 +5,7 @@ import { errorResponse } from "@/lib/http/api-error";
 import { createInvitation, getInvitationPageData } from "@/lib/invitations/service";
 import { createInvitationSchema, invitationListQuerySchema } from "@/lib/invitations/validation";
 
-export async function GET(request: Request) {
+async function GET(request: Request) {
   try {
     const url = new URL(request.url);
     const input = invitationListQuerySchema.parse({
@@ -21,7 +21,7 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+async function POST(request: Request) {
   try {
     const input = createInvitationSchema.parse(await request.json());
     const result = await createInvitation(input);
@@ -34,3 +34,13 @@ export async function POST(request: Request) {
     return errorResponse(error, "Create invitation API");
   }
 }
+
+export const GET = withApiMiddleware(GET, {
+  permission: "INVITATION_READ",
+  context: "GET app/api/invitations/route.ts API",
+});
+export const POST = withApiMiddleware(POST, {
+  permission: "INVITATION_CREATE",
+  resource: { resource: "team_members", amount: 1 },
+  context: "POST app/api/invitations/route.ts API",
+});
