@@ -10,7 +10,7 @@ function basicAuth(keyId: string, keySecret: string) {
   return `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString("base64")}`;
 }
 
-async function call<T extends RazorpayResponse>(path: string, method: "GET" | "POST", body?: unknown) {
+async function call<T extends RazorpayResponse>(path: string, method: "GET" | "POST" | "PATCH", body?: unknown) {
   const { keyId, keySecret } = getRazorpayConfig();
   const response = await fetch(`${BASE_URL}${path}`, {
     method,
@@ -36,6 +36,8 @@ function compareSignature(expected: string, actual: string) {
 export const RazorpayService = {
   createSubscription: (body: unknown) => call<RazorpayResponse>("/subscriptions", "POST", body),
   fetchSubscription: (id: string) => call<RazorpayResponse>(`/subscriptions/${encodeURIComponent(id)}`, "GET"),
+  updateSubscription: (id: string, body: unknown) => call<RazorpayResponse>(`/subscriptions/${encodeURIComponent(id)}`, "PATCH", body),
+  fetchInvoice: (id: string) => call<RazorpayResponse>(`/invoices/${encodeURIComponent(id)}`, "GET"),
   cancelSubscription: (id: string, cancelAtCycleEnd: boolean) => call<RazorpayResponse>(`/subscriptions/${encodeURIComponent(id)}/cancel`, "POST", { cancel_at_cycle_end: cancelAtCycleEnd ? 1 : 0 }),
   refundPayment: (paymentId: string, amount?: number) => call<RazorpayResponse>(`/payments/${encodeURIComponent(paymentId)}/refund`, "POST", amount === undefined ? undefined : { amount }),
 
