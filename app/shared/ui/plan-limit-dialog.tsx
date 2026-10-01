@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ArrowUpRight, TriangleAlert, X } from "lucide-react";
 import { Button } from "./button";
@@ -7,6 +8,7 @@ import { Button } from "./button";
 type LimitDialogDetail = { code: "PLAN_LIMIT_REACHED" | "FEATURE_NOT_AVAILABLE"; message: string; resource?: string; used?: number; limit?: number; requested?: number; planName?: string; feature?: string; billingPath?: string };
 
 export function PlanLimitDialog() {
+  const router = useRouter();
   const [detail, setDetail] = useState<LimitDialogDetail | null>(null);
   useEffect(() => {
     const handle = (event: Event) => setDetail((event as CustomEvent<LimitDialogDetail>).detail);
