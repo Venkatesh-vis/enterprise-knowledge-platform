@@ -10,7 +10,7 @@ const schema = z.object({
   planId: z.string().uuid(),
 });
 
-async function POST(request: Request) {
+async function handlePOST(request: Request) {
   try {
     const body = schema.parse(await request.json());
     return NextResponse.json(
@@ -22,7 +22,7 @@ async function POST(request: Request) {
   }
 }
 
-export const POST = withApiMiddleware(POST, {
+export const POST = withApiMiddleware(handlePOST, {
   permission: "BILLING_MANAGE",
   context: "POST app/api/billing/upgrade/route.ts API",
 });
