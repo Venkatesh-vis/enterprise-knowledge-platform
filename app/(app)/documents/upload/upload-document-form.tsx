@@ -83,6 +83,7 @@ export function UploadDocumentForm({
       setFile(null);
       setName("");
       setSuccess("Document uploaded successfully.");
+      window.dispatchEvent(new Event("workspace:changed"));
 
       router.push("/documents");
     } catch (uploadError) {
