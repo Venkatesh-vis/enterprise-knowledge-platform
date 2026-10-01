@@ -4,7 +4,7 @@ import { errorResponse } from "@/lib/http/api-error";
 import { importInvitations } from "@/lib/invitations/service";
 import { importInvitationSchema } from "@/lib/invitations/validation";
 
-async function POST(request: Request) {
+async function handlePOST(request: Request) {
   try {
     const body = await request.json();
     const invitations = importInvitationSchema.parse(body?.invitations);
@@ -15,7 +15,7 @@ async function POST(request: Request) {
   }
 }
 
-export const POST = withApiMiddleware(POST, {
+export const POST = withApiMiddleware(handlePOST, {
   permission: "INVITATION_IMPORT",
   context: "POST app/api/invitations/import/route.ts API",
 });
