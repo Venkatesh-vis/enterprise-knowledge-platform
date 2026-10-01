@@ -4,10 +4,21 @@ import { errorResponse } from "@/lib/http/api-error";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const [billing, payments] = await Promise.all([getCurrentEntitlement(), getBillingPayments()]);
-    return NextResponse.json({ success: true, data: { ...billing, payments } }, { headers: { "Cache-Control": "no-store" } });
+    const url = new URL(request.url);
+    const from = url.searchParams.get("from") ?? undefined;
+    const to = url.searchParams.get("to") ?? undefined;
+
+    const [billing, payments] = await Promise.all([
+      getCurrentEntitlement(),
+      getBillingPayments({ from, to }),
+    ]);
+
+    return NextResponse.json(
+      { success: true, data: { ...billing, payments, filters: { from: from ?? null, to: to ?? null } } },
+      { headers: { "Cache-Control": "no-store" } },
+    );
   } catch (error) {
     return errorResponse(error, "Billing state API");
   }
