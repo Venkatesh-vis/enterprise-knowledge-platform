@@ -7,15 +7,18 @@ import {
 
 import { formatDate } from "./billing-utils";
 import type { Billing } from "./billing-types";
+import type { WorkspaceOverview } from "@/lib/workspace/types";
 
 type BillingSummaryProps = {
   billing: Billing;
+  workspace: WorkspaceOverview | null;
   busy: string | null;
   onCancel: () => void;
 };
 
 export function BillingSummary({
   billing,
+  workspace,
   busy,
   onCancel,
 }: BillingSummaryProps) {
@@ -41,7 +44,7 @@ export function BillingSummary({
           {
             label: "Team seats",
             value:
-              String(billing.usage.team_members ?? 0) +
+              String(workspace?.members ?? 0) +
               " / " +
               (billing.plan.limits.team_members === null ? "∞" : String(billing.plan.limits.team_members ?? "—")),
             detail: "Active team member usage",
@@ -49,7 +52,7 @@ export function BillingSummary({
           },
           {
             label: "Storage",
-            value: (billing.usage.storage_mb ?? 0).toLocaleString("en-IN") + " MB",
+            value: (workspace?.storageMb ?? 0).toLocaleString("en-IN") + " MB",
             detail:
               billing.plan.limits.storage_mb === null
                 ? "Unlimited"
