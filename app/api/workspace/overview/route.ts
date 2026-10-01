@@ -6,7 +6,7 @@ import { errorResponse } from "@/lib/http/api-error";
 
 export const runtime = "nodejs";
 
-async function GET() {
+async function handleGET() {
   try {
     return NextResponse.json(
       {
@@ -24,7 +24,7 @@ async function GET() {
   }
 }
 
-export const GET = withApiMiddleware(GET, {
+export const GET = withApiMiddleware(handleGET, {
   permission: "DASHBOARD_VIEW",
   context: "GET app/api/workspace/overview/route.ts API",
 });
