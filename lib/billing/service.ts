@@ -28,7 +28,7 @@ async function findCurrentSubscription(organizationId: string, transaction?: any
   return Subscription.findOne({ where: { organizationId }, include: [{ model: BillingPlan, as: "plan" }], order: [["createdAt", "DESC"]], transaction });
 }
 
-async function getEntitlementForOrganization(organizationId: string, transaction?: any) {
+export async function getEntitlementForOrganization(organizationId: string, transaction?: any) {
   const subscription = await findCurrentSubscription(organizationId, transaction);
   const freePlan = await BillingPlan.findOne({ where: { name: "Free", active: true }, transaction });
   if (!freePlan) throw new BillingServiceError("BILLING_CONFIGURATION_ERROR", "Free plan is not configured.", 500);
