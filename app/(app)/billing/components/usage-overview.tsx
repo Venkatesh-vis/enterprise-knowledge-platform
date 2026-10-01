@@ -2,12 +2,14 @@ import { Sparkles } from "lucide-react";
 
 import { formatResource, RESOURCE_ICONS } from "./billing-utils";
 import type { Billing } from "./billing-types";
+import type { WorkspaceOverview } from "@/lib/workspace/types";
 
 type UsageOverviewProps = {
   billing: Billing;
+  workspace: WorkspaceOverview | null;
 };
 
-export function UsageOverview({ billing }: UsageOverviewProps) {
+export function UsageOverview({ billing, workspace }: UsageOverviewProps) {
   return (
     <section>
       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Usage & entitlements</p>
@@ -16,7 +18,16 @@ export function UsageOverview({ billing }: UsageOverviewProps) {
 
       <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {Object.entries(billing.plan.limits).map(([resource, limit]) => {
-          const used = billing.usage[resource] ?? 0;
+          const used =
+            resource === "documents"
+              ? (workspace?.documents ?? 0)
+              : resource === "knowledge_bases"
+                ? (workspace?.knowledgeBases ?? 0)
+                : resource === "team_members"
+                  ? (workspace?.members ?? 0)
+                  : resource === "storage_mb"
+                    ? (workspace?.storageMb ?? 0)
+                    : (workspace?.aiQueriesMonth ?? billing.usage[resource] ?? 0);
           const percent = limit === null || !limit ? 0 : Math.min(100, Math.round((used / Number(limit)) * 100));
           const Icon = RESOURCE_ICONS[resource] ?? Sparkles;
 
