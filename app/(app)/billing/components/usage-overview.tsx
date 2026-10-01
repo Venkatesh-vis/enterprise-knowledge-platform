@@ -18,16 +18,19 @@ export function UsageOverview({ billing, workspace }: UsageOverviewProps) {
 
       <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {Object.entries(billing.plan.limits).map(([resource, limit]) => {
-          const used =
+          const usedValue =
             resource === "documents"
-              ? (workspace?.documents ?? 0)
+              ? workspace?.documents
               : resource === "knowledge_bases"
-                ? (workspace?.knowledgeBases ?? 0)
+                ? workspace?.knowledgeBases
                 : resource === "team_members"
-                  ? (workspace?.members ?? 0)
+                  ? workspace?.members
                   : resource === "storage_mb"
-                    ? (workspace?.storageMb ?? 0)
-                    : (workspace?.aiQueriesMonth ?? billing.usage[resource] ?? 0);
+                    ? workspace?.storageMb
+                    : workspace?.aiQueriesMonth ?? billing.usage[resource];
+
+          const hasValue = usedValue !== undefined;
+          const used = usedValue ?? 0;
           const percent = limit === null || !limit ? 0 : Math.min(100, Math.round((used / Number(limit)) * 100));
           const Icon = RESOURCE_ICONS[resource] ?? Sparkles;
 
