@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
+import { withApiMiddleware } from "@/lib/http/api-middleware";
 import { syncCurrentSubscription } from "@/lib/billing/service";
 import { errorResponse } from "@/lib/http/api-error";
 
 export const runtime = "nodejs";
 
-export async function POST() {
+async function POST() {
   try {
     return NextResponse.json({
       success: true,
@@ -14,3 +15,8 @@ export async function POST() {
     return errorResponse(error, "Billing sync API");
   }
 }
+
+export const POST = withApiMiddleware(POST, {
+  permission: "BILLING_READ",
+  context: "POST app/api/billing/sync/route.ts API",
+});
