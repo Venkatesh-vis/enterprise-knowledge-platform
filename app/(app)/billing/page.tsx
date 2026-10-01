@@ -171,17 +171,10 @@ export default function BillingPage() {
   const [invoiceFrom, setInvoiceFrom] = useState("");
   const [invoiceTo, setInvoiceTo] = useState("");
 
-  const refresh = async (from = invoiceFrom, to = invoiceTo, sync = false) => {
+  const refresh = async (from = invoiceFrom, to = invoiceTo) => {
     setLoading(true);
 
     try {
-      if (sync) {
-        await apiRequest({
-          path: "/api/billing/sync",
-          method: "POST",
-        }).catch(() => undefined);
-      }
-
       const [planResponse, billingResponse] = await Promise.all([
         apiRequest<{ data: { plans: Plan[] } }>({ path: "/api/billing/plans" }),
         apiRequest<{ data: Billing }>({
@@ -204,7 +197,7 @@ export default function BillingPage() {
   };
 
   useEffect(() => {
-    void refresh("", "", true);
+    void refresh("", "");
   }, []);
 
   const checkout = async (planId: string) => {
