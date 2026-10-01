@@ -8,7 +8,7 @@ import {
 
 import Role from "@/db/models/role";
 
-export async function GET() {
+async function GET() {
   try {
     await requirePermission(
       "USER_READ",
@@ -76,3 +76,7 @@ export async function GET() {
     );
   }
 }
+export const GET = withApiMiddleware(GET, {
+  permission: "USER_READ",
+  context: "GET app/api/users/roles/route.ts API",
+});
