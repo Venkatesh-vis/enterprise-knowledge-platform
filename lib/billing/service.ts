@@ -197,8 +197,68 @@ export async function verifySubscriptionPayment(input: { subscriptionId: string;
   const subscription = await Subscription.findOne({ where: { id: input.subscriptionId, organizationId: auth.organization.id } });
   if (!subscription || subscription.razorpaySubscriptionId !== input.razorpaySubscriptionId) throw new BillingServiceError("PAYMENT_VERIFICATION_FAILED", "Subscription verification failed.", 400);
   RazorpayService.verifySubscriptionPayment(input.razorpayPaymentId, subscription.razorpaySubscriptionId, input.razorpaySignature);
-  await recordBillingAudit(auth.organization.id, auth.user.id, "PAYMENT_SIGNATURE_VERIFIED", subscription.id, { razorpayPaymentId: input.razorpayPaymentId });
-  return { verified: true };
+
+  const razorpaySubscription = await RazorpayService.fetchSubscription(input.razorpaySubscriptionId);
+  const remoteStatus = mapSubscriptionStatus(String(razorpaySubscription.status ?? ""));
+  const currentPlanId = subscription.planId;
+  let resolvedPlanId = currentPlanId;
+
+  if (razorpaySubscription.plan_id) {
+    const remotePlan = await BillingPlan.findOne({
+      where: { razorpayPlanId: String(razorpaySubscription.plan_id), active: true },
+      attributes: ["id"],
+      raw: true,
+    });
+    if (remotePlan) resolvedPlanId = remotePlan.id;
+  }
+
+  await subscription.update({
+    planId: resolvedPlanId,
+    status: remoteStatus,
+    razorpayCustomerId: razorpaySubscription.customer_id ?? subscription.razorpayCustomerId,
+    currentPeriodStart: dateFromUnix(razorpaySubscription.current_start) ?? subscription.currentPeriodStart,
+    currentPeriodEnd: dateFromUnix(razorpaySubscription.current_end) ?? subscription.currentPeriodEnd,
+    cancelledAt: dateFromUnix(razorpaySubscription.ended_at) ?? subscription.cancelledAt,
+  });
+
+  const payment = await RazorpayService.fetchPayment(input.razorpayPaymentId);
+  const paymentStatus = String(payment.status ?? "").toLowerCase() === "captured"
+    ? "CAPTURED"
+    : String(payment.status ?? "").toLowerCase() === "authorized"
+      ? "AUTHORIZED"
+      : "FAILED";
+
+  await BillingPayment.upsert({
+    id: randomUUID(),
+    organizationId: auth.organization.id,
+    subscriptionId: subscription.id,
+    userId: auth.user.id,
+    razorpayPaymentId: input.razorpayPaymentId,
+    razorpayOrderId: payment.order_id ?? null,
+    razorpayInvoiceId: payment.invoice_id ?? null,
+    amount: Number(payment.amount ?? 0),
+    currency: String(payment.currency ?? "INR"),
+    status: paymentStatus,
+    method: payment.method ?? null,
+    capturedAt: paymentStatus === "CAPTURED" ? (dateFromUnix(payment.created_at) ?? new Date()) : null,
+    failureCode: payment.error_code ?? null,
+    failureReason: payment.error_description ?? null,
+    metadata: { source: "VERIFY", verifiedAt: new Date().toISOString() },
+  });
+
+  await recordBillingAudit(auth.organization.id, auth.user.id, "PAYMENT_VERIFIED_AND_RECONCILED", subscription.id, {
+    razorpayPaymentId: input.razorpayPaymentId,
+    razorpaySubscriptionId: input.razorpaySubscriptionId,
+    status: remoteStatus,
+    planId: String(resolvedPlanId),
+  });
+
+  return {
+    verified: true,
+    status: remoteStatus,
+    subscriptionId: subscription.id,
+    planId: String(resolvedPlanId),
+  };
 }
 
 function mapSubscriptionStatus(status: string) {
