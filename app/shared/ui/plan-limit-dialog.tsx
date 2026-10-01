@@ -43,7 +43,7 @@ export function PlanLimitDialog() {
           )}
           <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button variant="ghost" onClick={() => setDetail(null)}>Close</Button>
-            <Button onClick={() => { setDetail(null); window.location.href = detail.billingPath ?? "/billing"; }}>Go to Billing<ArrowUpRight className="ml-1.5 h-4 w-4" /></Button>
+            <Button onClick={() => { setDetail(null); router.push(detail.billingPath ?? "/billing"); }}>Go to Billing<ArrowUpRight className="ml-1.5 h-4 w-4" /></Button>
           </div>
         </div>
       </div>
