@@ -9,58 +9,36 @@ import {
   OrganizationMembership,
 } from "@/db/models";
 import { requirePermission } from "@/lib/auth/authorization";
-
-  documents: number;
-  knowledgeBases: number;
-  members: number;
-  storageBytes: number;
-  storageMb: number;
-  aiQueriesMonth: number;
+import type { WorkspaceOverview } from "./types";
 
 export async function getWorkspaceOverview(): Promise<WorkspaceOverview> {
   const auth = await requirePermission("DASHBOARD_VIEW");
-
   const periodKey = new Date().toISOString().slice(0, 7);
 
-  const [
-    documents,
-    knowledgeBases,
-    members,
-    storageBytes,
-    aiQueryCounter,
-  ] = await Promise.all([
-    Document.count({
-      where: {
-        organizationId: auth.organization.id,
-      },
-    }),
-    KnowledgeBase.count({
-      where: {
-        organizationId: auth.organization.id,
-      },
-    }),
-    OrganizationMembership.count({
-      where: {
-        organizationId: auth.organization.id,
-      },
-    }),
-    Document.sum("sizeBytes", {
-      where: {
-        organizationId: auth.organization.id,
-      },
-    }),
-    BillingUsageCounter.findOne({
-      where: {
-        organizationId: auth.organization.id,
-        resource: "ai_queries_month",
-        periodKey: {
-          [Op.eq]: periodKey,
+  const [documents, knowledgeBases, members, storageBytes, aiQueryCounter] =
+    await Promise.all([
+      Document.count({
+        where: { organizationId: auth.organization.id },
+      }),
+      KnowledgeBase.count({
+        where: { organizationId: auth.organization.id },
+      }),
+      OrganizationMembership.count({
+        where: { organizationId: auth.organization.id },
+      }),
+      Document.sum("sizeBytes", {
+        where: { organizationId: auth.organization.id },
+      }),
+      BillingUsageCounter.findOne({
+        where: {
+          organizationId: auth.organization.id,
+          resource: "ai_queries_month",
+          periodKey: { [Op.eq]: periodKey },
         },
-      },
-      attributes: ["used"],
-      raw: true,
-    }),
-  ]);
+        attributes: ["used"],
+        raw: true,
+      }),
+    ]);
 
   const normalizedStorageBytes = Number(storageBytes ?? 0);
 
