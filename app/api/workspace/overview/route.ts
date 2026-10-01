@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
+import { withApiMiddleware } from "@/lib/http/api-middleware";
 
 import { getWorkspaceOverview } from "@/lib/workspace/service";
 import { errorResponse } from "@/lib/http/api-error";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+async function GET() {
   try {
     return NextResponse.json(
       {
@@ -22,3 +23,8 @@ export async function GET() {
     return errorResponse(error, "Workspace overview API");
   }
 }
+
+export const GET = withApiMiddleware(GET, {
+  permission: "DASHBOARD_VIEW",
+  context: "GET app/api/workspace/overview/route.ts API",
+});
