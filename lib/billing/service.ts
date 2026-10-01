@@ -99,8 +99,22 @@ async function syncSubscriptionInvoices(
   razorpaySubscriptionId: string,
   userId: string,
 ) {
-  const response = await RazorpayService.fetchSubscriptionInvoices(razorpaySubscriptionId, 0, 100);
-  const invoices = Array.isArray(response?.items) ? response.items : [];
+  const invoices: any[] = [];
+  let skip = 0;
+
+  while (true) {
+    const response = await RazorpayService.fetchSubscriptionInvoices(razorpaySubscriptionId, skip, 100);
+    const batch = Array.isArray(response?.items)
+      ? response.items
+      : Array.isArray(response?.item)
+        ? response.item
+        : [];
+
+    invoices.push(...batch);
+
+    if (batch.length < 100) break;
+    skip += batch.length;
+  }
 
   for (const invoice of invoices) {
     const paymentId = String(invoice.payment_id ?? "").trim();
@@ -167,6 +181,30 @@ async function syncSubscriptionInvoices(
   return invoices.length;
 }
 
+async function syncOrganizationInvoices(organizationId: string, userId: string) {
+  const subscriptions = await Subscription.findAll({
+    where: { organizationId },
+    attributes: ["id", "razorpaySubscriptionId"],
+    raw: true,
+  });
+
+  let invoiceCount = 0;
+  for (const subscription of subscriptions as any[]) {
+    try {
+      invoiceCount += await syncSubscriptionInvoices(
+        organizationId,
+        String(subscription.id),
+        String(subscription.razorpaySubscriptionId),
+        userId,
+      );
+    } catch (error) {
+      console.error("Failed to sync subscription invoices:", error);
+    }
+  }
+
+  return invoiceCount;
+}
+
 export async function syncCurrentSubscription() {
   const auth = await requirePermission("BILLING_READ");
   const subscription = await findCurrentSubscription(auth.organization.id);
@@ -194,10 +232,8 @@ export async function syncCurrentSubscription() {
     cancelledAt: dateFromUnix(remote.ended_at) ?? subscription.cancelledAt,
   });
 
-  const invoiceCount = await syncSubscriptionInvoices(
+  const invoiceCount = await syncOrganizationInvoices(
     auth.organization.id,
-    String(subscription.id),
-    String(subscription.razorpaySubscriptionId),
     auth.user.id,
   );
 
@@ -532,7 +568,7 @@ export async function getBillingPayments(filters: { from?: string; to?: string }
   const from = filters.from?.trim();
   const to = filters.to?.trim();
 
-  if ((from && !/^\\d{4}-\\d{2}-\\d{2}$/.test(from)) || (to && !/^\\d{4}-\\d{2}-\\d{2}$/.test(to))) {
+  if ((from && !/^\d{4}-\d{2}-\d{2}$/.test(from)) || (to && !/^\d{4}-\d{2}-\d{2}$/.test(to))) {
     throw new BillingServiceError("INVALID_BILLING_DATE_RANGE", "Billing dates must use YYYY-MM-DD format.", 400);
   }
   if (from && to && from > to) throw new BillingServiceError("INVALID_BILLING_DATE_RANGE", "The From date must be on or before the To date.", 400);
