@@ -6,6 +6,7 @@ import sequelize from "@/lib/database";
 import { requirePermission } from "@/lib/auth/authorization";
 import { createAuditLog } from "@/lib/audit/audit-service";
 import { getCurrentEntitlement } from "@/lib/billing/service";
+import { assertPlanResourceAvailable } from "@/lib/billing/guards";
 import { consumeUsageWithPlan } from "@/lib/billing/usage";
 import { DOCUMENT_EXTENSIONS, DOCUMENT_MIME_TYPES, DOCUMENT_PAGE_SIZE, type DocumentFileType } from "./constants";
 import { documentStorage } from "./storage";
@@ -31,7 +32,7 @@ export async function getDocumentStorageAccess(id: string) { const auth = await 
 
 export async function createDocument(input: { file: File; name: string; knowledgeBaseIds: string[] }) {
   const auth = await requirePermission("DOCUMENT_CREATE"); const entitlement = await getCurrentEntitlement(); const limit = entitlement.plan.limits.documents ?? null;
-  const fileType = await validateDocumentFile(input.file); const name = validateDocumentName(input.name || input.file.name); const baseIds = await assertBases(auth.organization.id, input.knowledgeBaseIds); const id = randomUUID(); const storageKey = `${auth.organization.id}/${id}${DOCUMENT_EXTENSIONS[fileType]}`; let stored = false;
+  const fileType = await validateDocumentFile(input.file); const name = validateDocumentName(input.name || input.file.name); await assertPlanResourceAvailable(auth.organization.id, "documents", 1); await assertPlanResourceAvailable(auth.organization.id, "storage_mb", Math.max(1, Math.ceil(input.file.size / 1024 / 1024))); const baseIds = await assertBases(auth.organization.id, input.knowledgeBaseIds); const id = randomUUID(); const storageKey = `${auth.organization.id}/${id}${DOCUMENT_EXTENSIONS[fileType]}`; let stored = false;
   try {
     await documentStorage.save(storageKey, Buffer.from(await input.file.arrayBuffer()), DOCUMENT_MIME_TYPES[fileType]); stored = true;
     await sequelize.transaction(async (transaction) => {
