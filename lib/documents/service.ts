@@ -5,9 +5,7 @@ import { Document, DocumentKnowledgeBase, KnowledgeBase, User } from "@/db/model
 import sequelize from "@/lib/database";
 import { requirePermission } from "@/lib/auth/authorization";
 import { createAuditLog } from "@/lib/audit/audit-service";
-import { getCurrentEntitlement } from "@/lib/billing/service";
-import { assertPlanResourceAvailable } from "@/lib/billing/guards";
-import { consumeUsageWithPlan } from "@/lib/billing/usage";
+import { assertPlanFeature, assertPlanResourceAvailable } from "@/lib/billing/guards";
 import { DOCUMENT_EXTENSIONS, DOCUMENT_MIME_TYPES, DOCUMENT_PAGE_SIZE, type DocumentFileType } from "./constants";
 import { documentStorage } from "./storage";
 import { normalizeKnowledgeBaseIds, validateDocumentFile, validateDocumentName } from "./validation";
