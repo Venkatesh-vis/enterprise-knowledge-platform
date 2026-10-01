@@ -125,6 +125,7 @@ export function KnowledgeBaseManager({
       setKnowledgeBases((current) =>
         current.filter((item) => item.id !== result.data.knowledgeBaseId),
       );
+      window.dispatchEvent(new Event("workspace:changed"));
       setDeleteId(null);
     } catch (caughtError) {
       setError(
