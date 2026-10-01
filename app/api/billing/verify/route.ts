@@ -7,7 +7,7 @@ import { errorResponse } from "@/lib/http/api-error";
 export const runtime = "nodejs";
 const schema = z.object({ subscriptionId: z.string().uuid(), razorpaySubscriptionId: z.string().min(1), razorpayPaymentId: z.string().min(1), razorpaySignature: z.string().min(1) });
 
-async function POST(request: Request) {
+async function handlePOST(request: Request) {
   try {
     return NextResponse.json({ success: true, data: await verifySubscriptionPayment(schema.parse(await request.json())) });
   } catch (error) {
@@ -15,7 +15,7 @@ async function POST(request: Request) {
   }
 }
 
-export const POST = withApiMiddleware(POST, {
+export const POST = withApiMiddleware(handlePOST, {
   permission: "BILLING_MANAGE",
   context: "POST app/api/billing/verify/route.ts API",
 });
