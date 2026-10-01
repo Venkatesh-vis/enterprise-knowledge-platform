@@ -7,7 +7,7 @@ import { errorResponse } from "@/lib/http/api-error";
 export const runtime = "nodejs";
 const schema = z.object({ cancelAtPeriodEnd: z.boolean().default(true) });
 
-async function POST(request: Request) {
+async function handlePOST(request: Request) {
   try {
     const body = schema.parse(await request.json());
     return NextResponse.json({ success: true, data: await cancelCurrentSubscription(body.cancelAtPeriodEnd) });
@@ -16,7 +16,7 @@ async function POST(request: Request) {
   }
 }
 
-export const POST = withApiMiddleware(POST, {
+export const POST = withApiMiddleware(handlePOST, {
   permission: "BILLING_MANAGE",
   context: "POST app/api/billing/cancel/route.ts API",
 });
