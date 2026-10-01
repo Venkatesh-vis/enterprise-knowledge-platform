@@ -85,7 +85,7 @@ function errorResponse(
   );
 }
 
-async function GET(
+async function handleGET(
   request: NextRequest,
 ) {
   try {
@@ -153,7 +153,7 @@ async function GET(
     );
   }
 }
-export const GET = withApiMiddleware(GET, {
+export const GET = withApiMiddleware(handleGET, {
   permission: "AUDIT_LOG_READ",
   context: "GET app/api/audit-logs/route.ts API",
 });
