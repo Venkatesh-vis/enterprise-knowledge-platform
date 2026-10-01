@@ -93,6 +93,80 @@ export async function listPlans() {
   return rows.map(serializePlan);
 }
 
+async function syncSubscriptionInvoices(
+  organizationId: string,
+  subscriptionId: string,
+  razorpaySubscriptionId: string,
+  userId: string,
+) {
+  const response = await RazorpayService.fetchSubscriptionInvoices(razorpaySubscriptionId, 0, 100);
+  const invoices = Array.isArray(response?.items) ? response.items : [];
+
+  for (const invoice of invoices) {
+    const paymentId = String(invoice.payment_id ?? "").trim();
+    const invoiceId = String(invoice.id ?? "").trim();
+    if (!paymentId || !invoiceId) continue;
+
+    const existing = await BillingPayment.findOne({
+      where: { organizationId, razorpayPaymentId: paymentId },
+    });
+
+    const paidAt = dateFromUnix(invoice.paid_at) ?? dateFromUnix(invoice.created_at);
+    const status = String(invoice.status ?? "").toLowerCase() === "paid" ? "CAPTURED" : "CREATED";
+    const amount = Number(invoice.amount_paid ?? invoice.amount ?? 0);
+    const currency = String(invoice.currency ?? "INR");
+
+    if (existing) {
+      await existing.update({
+        subscriptionId,
+        razorpayInvoiceId: invoiceId,
+        amount,
+        currency,
+        status,
+        capturedAt: status === "CAPTURED" ? paidAt : null,
+        metadata: {
+          source: "RAZORPAY_INVOICE_SYNC",
+          invoiceStatus: invoice.status ?? null,
+        },
+      });
+      continue;
+    }
+
+    let method = null;
+    try {
+      const payment = await RazorpayService.fetchPayment(paymentId);
+      method = payment.method ?? null;
+    } catch {
+      // Invoice synchronization should not fail because optional payment
+      // detail lookup is temporarily unavailable.
+    }
+
+    await BillingPayment.create({
+      id: randomUUID(),
+      organizationId,
+      subscriptionId,
+      userId,
+      razorpayPaymentId: paymentId,
+      razorpayOrderId: invoice.order_id ?? null,
+      razorpayInvoiceId: invoiceId,
+      amount,
+      currency,
+      status,
+      method,
+      capturedAt: status === "CAPTURED" ? paidAt : null,
+      failureCode: null,
+      failureReason: null,
+      refundedAmount: 0,
+      metadata: {
+        source: "RAZORPAY_INVOICE_SYNC",
+        invoiceStatus: invoice.status ?? null,
+      },
+    });
+  }
+
+  return invoices.length;
+}
+
 export async function syncCurrentSubscription() {
   const auth = await requirePermission("BILLING_READ");
   const subscription = await findCurrentSubscription(auth.organization.id);
@@ -120,11 +194,19 @@ export async function syncCurrentSubscription() {
     cancelledAt: dateFromUnix(remote.ended_at) ?? subscription.cancelledAt,
   });
 
+  const invoiceCount = await syncSubscriptionInvoices(
+    auth.organization.id,
+    String(subscription.id),
+    String(subscription.razorpaySubscriptionId),
+    auth.user.id,
+  );
+
   return {
     synced: true,
     subscriptionId: String(subscription.id),
     status: remoteStatus,
     planId: String(resolvedPlanId),
+    invoiceCount,
   };
 }
 
@@ -280,6 +362,13 @@ export async function verifySubscriptionPayment(input: { subscriptionId: string;
     failureReason: payment.error_description ?? null,
     metadata: { source: "VERIFY", verifiedAt: new Date().toISOString() },
   });
+
+  await syncSubscriptionInvoices(
+    auth.organization.id,
+    String(subscription.id),
+    String(subscription.razorpaySubscriptionId),
+    auth.user.id,
+  );
 
   await recordBillingAudit(auth.organization.id, auth.user.id, "PAYMENT_VERIFIED_AND_RECONCILED", subscription.id, {
     razorpayPaymentId: input.razorpayPaymentId,
@@ -449,13 +538,18 @@ export async function getBillingPayments(filters: { from?: string; to?: string }
   if (from && to && from > to) throw new BillingServiceError("INVALID_BILLING_DATE_RANGE", "The From date must be on or before the To date.", 400);
 
   if (from || to) {
-    where.createdAt = {};
-    if (from) where.createdAt[Op.gte] = new Date(`${from}T00:00:00.000Z`);
+    const range: any = {};
+    if (from) range[Op.gte] = new Date(`${from}T00:00:00.000Z`);
     if (to) {
       const exclusiveTo = new Date(`${to}T00:00:00.000Z`);
       exclusiveTo.setUTCDate(exclusiveTo.getUTCDate() + 1);
-      where.createdAt[Op.lt] = exclusiveTo;
+      range[Op.lt] = exclusiveTo;
     }
+
+    where[Op.or] = [
+      { capturedAt: range },
+      { capturedAt: null, createdAt: range },
+    ];
   }
 
   const rows = await BillingPayment.findAll({ where, order: [["createdAt", "DESC"]], limit: 1000, raw: true });
