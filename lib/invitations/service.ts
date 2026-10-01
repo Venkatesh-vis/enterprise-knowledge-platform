@@ -938,6 +938,13 @@ export async function importInvitations(
     );
   }
 
+  const auth = await requirePermission("INVITATION_IMPORT");
+  await assertPlanResourceAvailable(
+    auth.organization.id,
+    "team_members",
+    inputs.length,
+  );
+
   const created: InvitationListItem[] = [];
   const failedEmails: string[] = [];
   const skipped: {
