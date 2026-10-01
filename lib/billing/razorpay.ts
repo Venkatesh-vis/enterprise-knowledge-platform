@@ -34,6 +34,7 @@ function compareSignature(expected: string, actual: string) {
 }
 
 export const RazorpayService = {
+  createPlan: (body: unknown) => call<RazorpayResponse>("/plans", "POST", body),
   createSubscription: (body: unknown) => call<RazorpayResponse>("/subscriptions", "POST", body),
   fetchSubscription: (id: string) => call<RazorpayResponse>(`/subscriptions/${encodeURIComponent(id)}`, "GET"),
   updateSubscription: (id: string, body: unknown) => call<RazorpayResponse>(`/subscriptions/${encodeURIComponent(id)}`, "PATCH", body),
