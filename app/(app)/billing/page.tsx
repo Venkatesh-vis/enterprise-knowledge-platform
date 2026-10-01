@@ -235,7 +235,14 @@ export default function BillingPage() {
         },
         handler: async (response: any) => {
           try {
-            await apiRequest({
+            const verified = await apiRequest<{
+              data: {
+                verified: boolean;
+                status: string;
+                subscriptionId: string;
+                planId: string;
+              };
+            }>({
               path: "/api/billing/verify",
               method: "POST",
               body: {
@@ -246,7 +253,11 @@ export default function BillingPage() {
               },
             });
 
-            setMessage("Payment verified. Subscription activation follows the Razorpay webhook state.");
+            setMessage(
+              verified.data.status === "ACTIVE" || verified.data.status === "AUTHENTICATED"
+                ? "Payment verified. Your plan has been updated."
+                : "Payment verified. Your plan is being activated.",
+            );
           } catch (cause) {
             setError(cause instanceof Error ? cause.message : "Payment verification failed.");
           } finally {
