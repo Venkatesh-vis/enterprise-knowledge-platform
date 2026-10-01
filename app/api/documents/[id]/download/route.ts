@@ -1,4 +1,5 @@
 import { errorResponse } from "@/lib/http/api-error";
+import { withApiMiddleware } from "@/lib/http/api-middleware";
 import { getDocumentStorageAccess } from "@/lib/documents/service";
 import { documentStorage } from "@/lib/documents/storage";
 import { DOCUMENT_MIME_TYPES } from "@/lib/documents/constants";
