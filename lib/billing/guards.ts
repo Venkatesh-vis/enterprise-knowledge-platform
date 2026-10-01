@@ -1,5 +1,5 @@
 import { Op } from "sequelize";
-import { BillingPlan, BillingUsageCounter, Document, KnowledgeBase, OrganizationMembership } from "@/db/models";
+import { BillingUsageCounter, Document, Invitation, KnowledgeBase, OrganizationMembership } from "@/db/models";
 import { BILLING_RESOURCES, type BillingFeature, type BillingResource } from "./constants";
 import { BillingServiceError } from "./errors";
 import { getEntitlementForOrganization } from "./service";
@@ -10,8 +10,13 @@ export async function getPlanUsage(organizationId: string, resource: BillingReso
       return Number(await Document.count({ where: { organizationId }, transaction }));
     case BILLING_RESOURCES.KNOWLEDGE_BASES:
       return Number(await KnowledgeBase.count({ where: { organizationId }, transaction }));
-    case BILLING_RESOURCES.TEAM_MEMBERS:
-      return Number(await OrganizationMembership.count({ where: { organizationId }, transaction }));
+    case BILLING_RESOURCES.TEAM_MEMBERS: {
+      const [members, pendingInvitations] = await Promise.all([
+        OrganizationMembership.count({ where: { organizationId }, transaction }),
+        Invitation.count({ where: { organizationId, status: "PENDING" }, transaction }),
+      ]);
+      return Number(members) + Number(pendingInvitations);
+    }
     case BILLING_RESOURCES.STORAGE_MB: {
       const sum = await Document.sum("sizeBytes", { where: { organizationId }, transaction });
       return Math.ceil(Number(sum ?? 0) / 1024 / 1024);
