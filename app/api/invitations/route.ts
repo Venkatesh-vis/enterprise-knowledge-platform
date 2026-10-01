@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withApiMiddleware } from "@/lib/http/api-middleware";
 
 import { errorResponse } from "@/lib/http/api-error";
 import { createInvitation, getInvitationPageData } from "@/lib/invitations/service";
