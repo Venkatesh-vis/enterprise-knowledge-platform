@@ -591,13 +591,11 @@ export default function BillingPage() {
                   {busy === busyKey && <Loader2 className="h-4 w-4 animate-spin" />}
                   {current
                     ? "Current plan"
-                    : !backendPlan
-                      ? "Coming soon"
-                      : freeUser
-                        ? "Buy " + sourcePlan.name
-                        : isUpgrade
-                          ? "Upgrade to " + sourcePlan.name
-                          : "Lower plan"}
+                    : freeUser
+                      ? "Buy " + sourcePlan.name
+                      : isUpgrade
+                        ? "Upgrade to " + sourcePlan.name
+                        : "Lower plan"}
                   {canAct && <ArrowUpRight className="h-4 w-4" />}
                 </button>
               </article>
