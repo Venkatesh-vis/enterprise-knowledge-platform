@@ -602,7 +602,7 @@ export default function BillingPage() {
                 </button>
               </article>
             );
-          })}})}
+          })}
         </div>
       </section>
 
