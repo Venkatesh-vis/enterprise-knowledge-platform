@@ -83,6 +83,7 @@ export function InvitationAcceptForm({
         },
       });
 
+      window.dispatchEvent(new Event("workspace:changed"));
       router.replace("/dashboard");
     } catch (error) {
       const value = error as {
