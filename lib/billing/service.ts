@@ -112,6 +112,52 @@ export async function createSubscription(planId: string, idempotencyKey: string)
   }
 }
 
+export async function upgradeSubscription(planId: string) {
+  const auth = await requirePermission("BILLING_MANAGE");
+  const targetPlan = await BillingPlan.findOne({ where: { id: planId, active: true }, raw: true });
+  if (!targetPlan) throw new BillingServiceError("BILLING_PLAN_NOT_FOUND", "Billing plan not found.", 404);
+  if (Number(targetPlan.price) <= 0) throw new BillingServiceError("BILLING_PLAN_INACTIVE", "The selected plan does not require checkout.", 400);
+
+  const subscription = await findCurrentSubscription(auth.organization.id);
+  if (!subscription || !isSubscriptionEntitled(subscription)) {
+    throw new BillingServiceError("SUBSCRIPTION_NOT_ACTIVE", "There is no active paid subscription to upgrade.", 409);
+  }
+
+  const currentPlan = await BillingPlan.findOne({ where: { id: subscription.planId }, raw: true });
+  if (!currentPlan) throw new BillingServiceError("BILLING_CONFIGURATION_ERROR", "Current billing plan is not configured.", 500);
+  if (String(currentPlan.id) === String(targetPlan.id)) {
+    return { upgraded: false, alreadyCurrent: true, subscriptionId: String(subscription.id), razorpaySubscriptionId: String(subscription.razorpaySubscriptionId), plan: serializePlan(currentPlan) };
+  }
+  if (Number(targetPlan.price) <= Number(currentPlan.price)) {
+    throw new BillingServiceError("PLAN_UPGRADE_REQUIRED", "Only higher-priced plans can be selected here.", 400);
+  }
+
+  const razorpay = await RazorpayService.updateSubscription(String(subscription.razorpaySubscriptionId), {
+    plan_id: String(targetPlan.razorpayPlanId),
+    schedule_change_at: "now",
+    customer_notify: true,
+  });
+
+  await subscription.update({
+    planId: targetPlan.id,
+    currentPeriodStart: dateFromUnix(razorpay.current_start) ?? subscription.currentPeriodStart,
+    currentPeriodEnd: dateFromUnix(razorpay.current_end) ?? subscription.currentPeriodEnd,
+    cancelAtPeriodEnd: false,
+  });
+
+  await recordBillingAudit(auth.organization.id, auth.user.id, "SUBSCRIPTION_UPGRADED", String(subscription.id), {
+    fromPlanId: String(currentPlan.id),
+    toPlanId: String(targetPlan.id),
+    razorpaySubscriptionId: String(subscription.razorpaySubscriptionId),
+  });
+
+  return {
+    upgraded: true,
+    subscriptionId: String(subscription.id),
+    razorpaySubscriptionId: String(subscription.razorpaySubscriptionId),
+    plan: serializePlan(targetPlan),
+  };
+}
 export async function verifySubscriptionPayment(input: { subscriptionId: string; razorpaySubscriptionId: string; razorpayPaymentId: string; razorpaySignature: string }) {
   const auth = await requirePermission("BILLING_MANAGE");
   const subscription = await Subscription.findOne({ where: { id: input.subscriptionId, organizationId: auth.organization.id } });
@@ -152,7 +198,12 @@ async function processWebhookPayload(payload: any) {
       const updatedTime = row.updatedAt ? new Date(row.updatedAt).getTime() : 0;
       const isOlderState = eventTime > 0 && updatedTime > eventTime && (SUBSCRIPTION_STATUS_RANK[current] ?? 0) > (SUBSCRIPTION_STATUS_RANK[next] ?? 0);
       if (!isOlderState) {
-        await row.update({ status: next, razorpayCustomerId: subscriptionEntity.customer_id ?? row.razorpayCustomerId, currentPeriodStart: dateFromUnix(subscriptionEntity.current_start) ?? row.currentPeriodStart, currentPeriodEnd: dateFromUnix(subscriptionEntity.current_end) ?? row.currentPeriodEnd, cancelledAt: dateFromUnix(subscriptionEntity.ended_at) ?? row.cancelledAt });
+        let nextPlanId = row.planId;
+        if (subscriptionEntity.plan_id) {
+          const webhookPlan = await BillingPlan.findOne({ where: { razorpayPlanId: String(subscriptionEntity.plan_id), active: true }, raw: true });
+          if (webhookPlan) nextPlanId = webhookPlan.id;
+        }
+        await row.update({ planId: nextPlanId, status: next, razorpayCustomerId: subscriptionEntity.customer_id ?? row.razorpayCustomerId, currentPeriodStart: dateFromUnix(subscriptionEntity.current_start) ?? row.currentPeriodStart, currentPeriodEnd: dateFromUnix(subscriptionEntity.current_end) ?? row.currentPeriodEnd, cancelledAt: dateFromUnix(subscriptionEntity.ended_at) ?? row.cancelledAt });
         await recordBillingAudit(String(row.organizationId), null, `WEBHOOK_${eventType.toUpperCase().replaceAll(".", "_")}`, String(row.id), { razorpaySubscriptionId: subscriptionEntity.id, status: next });
       }
     }
@@ -257,9 +308,28 @@ export async function cancelCurrentSubscription(cancelAtPeriodEnd = true) {
   return { cancelled: true, status: sub.status, cancelAtPeriodEnd: sub.cancelAtPeriodEnd };
 }
 
-export async function getBillingPayments() {
+export async function getBillingPayments(filters: { from?: string; to?: string } = {}) {
   const auth = await requirePermission("BILLING_READ");
-  const rows = await BillingPayment.findAll({ where: { organizationId: auth.organization.id }, order: [["createdAt", "DESC"]], limit: 100, raw: true });
+  const where: any = { organizationId: auth.organization.id };
+  const from = filters.from?.trim();
+  const to = filters.to?.trim();
+
+  if ((from && !/^\\d{4}-\\d{2}-\\d{2}$/.test(from)) || (to && !/^\\d{4}-\\d{2}-\\d{2}$/.test(to))) {
+    throw new BillingServiceError("INVALID_BILLING_DATE_RANGE", "Billing dates must use YYYY-MM-DD format.", 400);
+  }
+  if (from && to && from > to) throw new BillingServiceError("INVALID_BILLING_DATE_RANGE", "The From date must be on or before the To date.", 400);
+
+  if (from || to) {
+    where.createdAt = {};
+    if (from) where.createdAt[Op.gte] = new Date(`${from}T00:00:00.000Z`);
+    if (to) {
+      const exclusiveTo = new Date(`${to}T00:00:00.000Z`);
+      exclusiveTo.setUTCDate(exclusiveTo.getUTCDate() + 1);
+      where.createdAt[Op.lt] = exclusiveTo;
+    }
+  }
+
+  const rows = await BillingPayment.findAll({ where, order: [["createdAt", "DESC"]], limit: 1000, raw: true });
   return rows.map((row: any) => ({
     id: String(row.id),
     paymentId: String(row.razorpayPaymentId),
@@ -270,7 +340,27 @@ export async function getBillingPayments() {
     status: String(row.status),
     method: row.method,
     capturedAt: row.capturedAt,
+    createdAt: row.createdAt,
+    refundedAmount: Number(row.refundedAmount ?? 0),
   }));
+}
+
+export async function getInvoiceDownloadUrl(invoiceId: string) {
+  const auth = await requirePermission("BILLING_READ");
+  const cleanId = invoiceId.trim();
+  if (!/^inv_[A-Za-z0-9]+$/.test(cleanId)) throw new BillingServiceError("INVOICE_NOT_FOUND", "Invoice not found.", 404);
+
+  const payment = await BillingPayment.findOne({
+    where: { organizationId: auth.organization.id, razorpayInvoiceId: cleanId },
+    attributes: ["id"],
+    raw: true,
+  });
+  if (!payment) throw new BillingServiceError("INVOICE_NOT_FOUND", "Invoice not found.", 404);
+
+  const invoice = await RazorpayService.fetchInvoice(cleanId);
+  const shortUrl = typeof invoice.short_url === "string" ? invoice.short_url : "";
+  if (!shortUrl) throw new BillingServiceError("INVOICE_NOT_AVAILABLE", "This invoice is not available for download yet.", 404);
+  return shortUrl;
 }
 
 export { BILLING_FEATURES };
