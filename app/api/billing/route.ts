@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
+import { withApiMiddleware } from "@/lib/http/api-middleware";
 import { getCurrentEntitlement, getBillingPayments, syncCurrentSubscription } from "@/lib/billing/service";
 import { errorResponse } from "@/lib/http/api-error";
 
 export const runtime = "nodejs";
 
-export async function GET(request: Request) {
+async function GET(request: Request) {
   try {
     const url = new URL(request.url);
     const from = url.searchParams.get("from") ?? undefined;
@@ -27,3 +28,8 @@ export async function GET(request: Request) {
     return errorResponse(error, "Billing state API");
   }
 }
+
+export const GET = withApiMiddleware(GET, {
+  permission: "BILLING_READ",
+  context: "GET app/api/billing/route.ts API",
+});
