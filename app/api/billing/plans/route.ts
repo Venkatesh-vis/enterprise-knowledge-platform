@@ -5,7 +5,7 @@ import { errorResponse } from "@/lib/http/api-error";
 
 export const runtime = "nodejs";
 
-async function GET() {
+async function handleGET() {
   try {
     return NextResponse.json({ success: true, data: { plans: await listPlans() } }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
@@ -13,7 +13,7 @@ async function GET() {
   }
 }
 
-export const GET = withApiMiddleware(GET, {
+export const GET = withApiMiddleware(handleGET, {
   permission: "BILLING_READ",
   context: "GET app/api/billing/plans/route.ts API",
 });
