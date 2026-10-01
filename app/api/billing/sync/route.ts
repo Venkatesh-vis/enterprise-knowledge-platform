@@ -5,7 +5,7 @@ import { errorResponse } from "@/lib/http/api-error";
 
 export const runtime = "nodejs";
 
-async function POST() {
+async function handlePOST() {
   try {
     return NextResponse.json({
       success: true,
@@ -16,7 +16,7 @@ async function POST() {
   }
 }
 
-export const POST = withApiMiddleware(POST, {
+export const POST = withApiMiddleware(handlePOST, {
   permission: "BILLING_READ",
   context: "POST app/api/billing/sync/route.ts API",
 });
