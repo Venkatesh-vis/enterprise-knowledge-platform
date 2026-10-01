@@ -1,4 +1,5 @@
 import {
+import { withApiMiddleware } from "@/lib/http/api-middleware";
   NextRequest,
   NextResponse,
 } from "next/server";
@@ -84,7 +85,7 @@ function errorResponse(
   );
 }
 
-export async function GET(
+async function GET(
   request: NextRequest,
 ) {
   try {
@@ -152,3 +153,7 @@ export async function GET(
     );
   }
 }
+export const GET = withApiMiddleware(GET, {
+  permission: "AUDIT_LOG_READ",
+  context: "GET app/api/audit-logs/route.ts API",
+});
