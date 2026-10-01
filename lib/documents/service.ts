@@ -31,12 +31,16 @@ export async function getDocumentDetail(id: string) { const auth = await require
 export async function getDocumentStorageAccess(id: string) { const auth = await requirePermission("DOCUMENT_READ"); const row = await Document.findOne({ where: { id: id.trim(), organizationId: auth.organization.id }, attributes: ["id", "name", "fileType", "sizeBytes", "storageKey"], raw: true }); if (!row) throw new DocumentServiceError("Document not found.", 404); return row; }
 
 export async function createDocument(input: { file: File; name: string; knowledgeBaseIds: string[] }) {
-  const auth = await requirePermission("DOCUMENT_CREATE"); const entitlement = await getCurrentEntitlement(); const limit = entitlement.plan.limits.documents ?? null;
-  const fileType = await validateDocumentFile(input.file); const name = validateDocumentName(input.name || input.file.name); await assertPlanResourceAvailable(auth.organization.id, "documents", 1); await assertPlanResourceAvailable(auth.organization.id, "storage_mb", Math.max(1, Math.ceil(input.file.size / 1024 / 1024))); const baseIds = await assertBases(auth.organization.id, input.knowledgeBaseIds); const id = randomUUID(); const storageKey = `${auth.organization.id}/${id}${DOCUMENT_EXTENSIONS[fileType]}`; let stored = false;
+  const auth = await requirePermission("DOCUMENT_CREATE");
+  await assertPlanFeature(auth.organization.id, "DOCUMENT_UPLOAD");
+  const fileType = await validateDocumentFile(input.file);
+  const name = validateDocumentName(input.name || input.file.name);
+  await assertPlanResourceAvailable(auth.organization.id, "documents", 1);
+  await assertPlanResourceAvailable(auth.organization.id, "storage_mb", Math.max(1, Math.ceil(input.file.size / 1024 / 1024)));
+  const baseIds = await assertBases(auth.organization.id, input.knowledgeBaseIds); const id = randomUUID(); const storageKey = `${auth.organization.id}/${id}${DOCUMENT_EXTENSIONS[fileType]}`; let stored = false;
   try {
     await documentStorage.save(storageKey, Buffer.from(await input.file.arrayBuffer()), DOCUMENT_MIME_TYPES[fileType]); stored = true;
     await sequelize.transaction(async (transaction) => {
-      await consumeUsageWithPlan({ organizationId: auth.organization.id, resource: "documents", amount: 1, limit, featureEnabled: entitlement.plan.features.includes("DOCUMENT_UPLOAD"), transaction });
       await Document.create({ id, organizationId: auth.organization.id, name, fileType, storageKey, sizeBytes: input.file.size, status: "PROCESSED", uploadedBy: auth.user.name, uploadedByUserId: auth.user.id }, { transaction });
       await DocumentKnowledgeBase.bulkCreate(baseIds.map((knowledgeBaseId) => ({ id: randomUUID(), documentId: id, knowledgeBaseId })), { transaction });
     });
