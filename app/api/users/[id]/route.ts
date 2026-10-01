@@ -92,7 +92,7 @@ function errorResponse(error: unknown) {
   );
 }
 
-export async function GET(
+async function GET(
   _request: NextRequest,
   {
     params,
@@ -130,7 +130,7 @@ export async function GET(
   }
 }
 
-export async function PATCH(
+async function PATCH(
   request: NextRequest,
   {
     params,
@@ -192,7 +192,7 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
+async function DELETE(
   _request: NextRequest,
   {
     params,
@@ -231,3 +231,15 @@ export async function DELETE(
     return errorResponse(error);
   }
 }
+export const GET = withApiMiddleware(GET, {
+  permission: "USER_READ",
+  context: "GET app/api/users/[id]/route.ts API",
+});
+export const PATCH = withApiMiddleware(PATCH, {
+  permission: "USER_UPDATE",
+  context: "PATCH app/api/users/[id]/route.ts API",
+});
+export const DELETE = withApiMiddleware(DELETE, {
+  permission: "USER_DELETE",
+  context: "DELETE app/api/users/[id]/route.ts API",
+});
