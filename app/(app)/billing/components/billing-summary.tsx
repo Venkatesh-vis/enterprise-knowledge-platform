@@ -44,7 +44,7 @@ export function BillingSummary({
           {
             label: "Team seats",
             value:
-              String(workspace?.members ?? 0) +
+              (workspace ? String(workspace.members) : "—") +
               " / " +
               (billing.plan.limits.team_members === null ? "∞" : String(billing.plan.limits.team_members ?? "—")),
             detail: "Active team member usage",
@@ -52,7 +52,9 @@ export function BillingSummary({
           },
           {
             label: "Storage",
-            value: (workspace?.storageMb ?? 0).toLocaleString("en-IN") + " MB",
+            value: workspace
+              ? workspace.storageMb.toLocaleString("en-IN") + " MB"
+              : "—",
             detail:
               billing.plan.limits.storage_mb === null
                 ? "Unlimited"
