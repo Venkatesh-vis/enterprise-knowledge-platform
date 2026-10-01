@@ -10,17 +10,15 @@ import {
 } from "@/db/models";
 import { requirePermission } from "@/lib/auth/authorization";
 
-export type WorkspaceOverview = {
   documents: number;
   knowledgeBases: number;
   members: number;
   storageBytes: number;
   storageMb: number;
   aiQueriesMonth: number;
-};
 
 export async function getWorkspaceOverview(): Promise<WorkspaceOverview> {
-  const auth = await requirePermission("BILLING_READ");
+  const auth = await requirePermission("DASHBOARD_VIEW");
 
   const periodKey = new Date().toISOString().slice(0, 7);
 
