@@ -6,6 +6,7 @@ import { KnowledgeBase, DocumentKnowledgeBase } from "@/db/models";
 import sequelize from "@/lib/database";
 import { requirePermission } from "@/lib/auth/authorization";
 import { createAuditLog } from "@/lib/audit/audit-service";
+import { assertPlanResourceAvailable } from "@/lib/billing/guards";
 
 export class KnowledgeBaseServiceError extends Error {
   status: number;
@@ -80,6 +81,7 @@ export async function getKnowledgeBaseOptions() {
 
 export async function createKnowledgeBase(input: { name: string; description?: string }) {
   const auth = await requirePermission("KNOWLEDGE_BASE_CREATE");
+  await assertPlanResourceAvailable(auth.organization.id, "knowledge_bases", 1);
   const name = validateName(input.name);
   const id = randomUUID();
   await KnowledgeBase.create({ id, organizationId: auth.organization.id, name, slug: await uniqueSlug(auth.organization.id, name), description: validateDescription(input.description), createdByUserId: auth.user.id });
