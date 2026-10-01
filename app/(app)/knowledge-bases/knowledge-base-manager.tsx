@@ -92,6 +92,7 @@ export function KnowledgeBaseManager({
       }
 
       setKnowledgeBases((current) => [result.data.knowledgeBase, ...current]);
+      window.dispatchEvent(new Event("workspace:changed"));
       setName("");
       setDescription("");
     } catch (caughtError) {
