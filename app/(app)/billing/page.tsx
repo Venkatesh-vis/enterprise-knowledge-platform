@@ -265,6 +265,7 @@ export default function BillingPage() {
                 ? "Payment verified. Your plan has been updated."
                 : "Payment verified. Your plan is being activated.",
             );
+            window.dispatchEvent(new Event("billing:updated"));
           } catch (cause) {
             setError(cause instanceof Error ? cause.message : "Payment verification failed.");
           } finally {
@@ -302,6 +303,7 @@ export default function BillingPage() {
       });
 
       setMessage("Your subscription upgrade has been applied.");
+      window.dispatchEvent(new Event("billing:updated"));
       await refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to upgrade subscription.");
