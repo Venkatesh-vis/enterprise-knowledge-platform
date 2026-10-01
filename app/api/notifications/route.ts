@@ -46,7 +46,7 @@ function errorResponse(
   );
 }
 
-async function GET() {
+async function handleGET() {
   try {
     const data =
       await getNotifications();
@@ -60,7 +60,7 @@ async function GET() {
   }
 }
 
-async function PATCH(
+async function handlePATCH(
   request: NextRequest,
 ) {
   try {
@@ -95,9 +95,9 @@ async function PATCH(
     return errorResponse(error);
   }
 }
-export const GET = withApiMiddleware(GET, {
+export const GET = withApiMiddleware(handleGET, {
   context: "GET app/api/notifications/route.ts API",
 });
-export const PATCH = withApiMiddleware(PATCH, {
+export const PATCH = withApiMiddleware(handlePATCH, {
   context: "PATCH app/api/notifications/route.ts API",
 });
