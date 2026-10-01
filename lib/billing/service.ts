@@ -93,6 +93,41 @@ export async function listPlans() {
   return rows.map(serializePlan);
 }
 
+export async function syncCurrentSubscription() {
+  const auth = await requirePermission("BILLING_READ");
+  const subscription = await findCurrentSubscription(auth.organization.id);
+  if (!subscription) return { synced: false, reason: "NO_SUBSCRIPTION" };
+
+  const remote = await RazorpayService.fetchSubscription(String(subscription.razorpaySubscriptionId));
+  const remoteStatus = mapSubscriptionStatus(String(remote.status ?? ""));
+  let resolvedPlanId = subscription.planId;
+
+  if (remote.plan_id) {
+    const remotePlan = await BillingPlan.findOne({
+      where: { razorpayPlanId: String(remote.plan_id), active: true },
+      attributes: ["id"],
+      raw: true,
+    });
+    if (remotePlan) resolvedPlanId = remotePlan.id;
+  }
+
+  await subscription.update({
+    planId: resolvedPlanId,
+    status: remoteStatus,
+    razorpayCustomerId: remote.customer_id ?? subscription.razorpayCustomerId,
+    currentPeriodStart: dateFromUnix(remote.current_start) ?? subscription.currentPeriodStart,
+    currentPeriodEnd: dateFromUnix(remote.current_end) ?? subscription.currentPeriodEnd,
+    cancelledAt: dateFromUnix(remote.ended_at) ?? subscription.cancelledAt,
+  });
+
+  return {
+    synced: true,
+    subscriptionId: String(subscription.id),
+    status: remoteStatus,
+    planId: String(resolvedPlanId),
+  };
+}
+
 export async function getCurrentEntitlement() {
   const auth = await requirePermission("BILLING_READ");
   const entitlement = await getEntitlementForOrganization(auth.organization.id);
