@@ -41,12 +41,43 @@ async function ensureIndex(queryInterface, tableName, fields, options = {}) {
   }
 }
 
-async function insertPlanIfMissing(queryInterface, Sequelize, plan) {
-  const [existingPlan] = await queryInterface.sequelize.query(
-    "SELECT id FROM billing_plans WHERE name = :name LIMIT 1",
-    { replacements: { name: plan.name }, type: Sequelize.QueryTypes.SELECT },
-  );
-  if (!existingPlan) await queryInterface.bulkInsert("billing_plans", [plan]);
+async function upsertPlan(queryInterface, Sequelize, plan, legacyNames = []) {
+  let existingPlan = (
+    await queryInterface.sequelize.query(
+      "SELECT id FROM billing_plans WHERE name = :name LIMIT 1",
+      { replacements: { name: plan.name }, type: Sequelize.QueryTypes.SELECT },
+    )
+  )[0];
+
+  if (!existingPlan) {
+    for (const legacyName of legacyNames) {
+      existingPlan = (
+        await queryInterface.sequelize.query(
+          "SELECT id FROM billing_plans WHERE name = :name LIMIT 1",
+          { replacements: { name: legacyName }, type: Sequelize.QueryTypes.SELECT },
+        )
+      )[0];
+
+      if (existingPlan) break;
+    }
+  }
+
+  const dbPlan = {
+    ...plan,
+    features: JSON.stringify(plan.features),
+    limits: JSON.stringify(plan.limits),
+    metadata: plan.metadata == null ? null : JSON.stringify(plan.metadata),
+  };
+
+  if (existingPlan) {
+    await queryInterface.bulkUpdate(
+      "billing_plans",
+      dbPlan,
+      { id: existingPlan.id },
+    );
+  } else {
+    await queryInterface.bulkInsert("billing_plans", [dbPlan]);
+  }
 }
 
 module.exports = {
@@ -92,11 +123,137 @@ module.exports = {
 
     const now = new Date();
     const plans = [
-      { id: randomUUID(), name: "Free", description: "Free plan", razorpayPlanId: "CONFIGURE_FREE_PLAN", billingInterval: "MONTHLY", price: 0, currency: "INR", features: ["KNOWLEDGE_BASE", "DOCUMENT_UPLOAD"], limits: { documents: 10, knowledge_bases: 1, team_members: 1, ai_queries_month: 20, storage_mb: 100 }, active: true, metadata: { system: true }, createdAt: now, updatedAt: now },
-      { id: randomUUID(), name: "Pro", description: "Professional plan", razorpayPlanId: "CONFIGURE_PRO_MONTHLY_PLAN", billingInterval: "MONTHLY", price: 99900, currency: "INR", features: ["KNOWLEDGE_BASE", "ADVANCED_SEARCH", "AI_ASSISTANT", "DOCUMENT_UPLOAD", "ANALYTICS", "EXPORT", "TEAM_MEMBERS", "API_ACCESS"], limits: { documents: 1000, knowledge_bases: 20, team_members: 10, ai_queries_month: 1000, storage_mb: 10000 }, active: true, metadata: { system: true }, createdAt: now, updatedAt: now },
-      { id: randomUUID(), name: "Enterprise", description: "Enterprise plan", razorpayPlanId: "CONFIGURE_ENTERPRISE_MONTHLY_PLAN", billingInterval: "MONTHLY", price: 499900, currency: "INR", features: ["KNOWLEDGE_BASE", "ADVANCED_SEARCH", "AI_ASSISTANT", "DOCUMENT_UPLOAD", "ANALYTICS", "EXPORT", "TEAM_MEMBERS", "API_ACCESS", "CUSTOM_BRANDING"], limits: { documents: null, knowledge_bases: null, team_members: null, ai_queries_month: null, storage_mb: null }, active: true, metadata: { system: true }, createdAt: now, updatedAt: now },
+      {
+        id: randomUUID(),
+        name: "Free",
+        description: "Free plan",
+        razorpayPlanId: "CONFIGURE_FREE_PLAN",
+        billingInterval: "MONTHLY",
+        price: 0,
+        currency: "INR",
+        features: ["KNOWLEDGE_BASE", "DOCUMENT_UPLOAD"],
+        limits: {
+          documents: 10,
+          knowledge_bases: 1,
+          team_members: 1,
+          ai_queries_month: 20,
+          storage_mb: 100,
+        },
+        active: true,
+        metadata: { system: true },
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: randomUUID(),
+        name: "Starter",
+        description: "For small teams getting started with centralized knowledge.",
+        razorpayPlanId: "CONFIGURE_STARTER_MONTHLY_PLAN",
+        billingInterval: "MONTHLY",
+        price: 99900,
+        currency: "INR",
+        features: ["KNOWLEDGE_BASE", "DOCUMENT_UPLOAD", "AI_ASSISTANT"],
+        limits: {
+          documents: 1000,
+          knowledge_bases: 5,
+          team_members: 10,
+          ai_queries_month: 1000,
+          storage_mb: 25600,
+        },
+        active: true,
+        metadata: { system: true, paymentPagePlan: "starter" },
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: randomUUID(),
+        name: "Business",
+        description: "For growing organizations that need advanced controls and collaboration.",
+        razorpayPlanId: "CONFIGURE_BUSINESS_MONTHLY_PLAN",
+        billingInterval: "MONTHLY",
+        price: 299900,
+        currency: "INR",
+        features: [
+          "KNOWLEDGE_BASE",
+          "ADVANCED_SEARCH",
+          "AI_ASSISTANT",
+          "DOCUMENT_UPLOAD",
+          "ANALYTICS",
+          "EXPORT",
+          "TEAM_MEMBERS",
+          "API_ACCESS",
+        ],
+        limits: {
+          documents: 5000,
+          knowledge_bases: 20,
+          team_members: 50,
+          ai_queries_month: 10000,
+          storage_mb: 102400,
+        },
+        active: true,
+        metadata: { system: true, paymentPagePlan: "business" },
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: randomUUID(),
+        name: "Enterprise",
+        description: "For organizations requiring maximum control, security and scale.",
+        razorpayPlanId: "CONFIGURE_ENTERPRISE_MONTHLY_PLAN",
+        billingInterval: "MONTHLY",
+        price: 799900,
+        currency: "INR",
+        features: [
+          "KNOWLEDGE_BASE",
+          "ADVANCED_SEARCH",
+          "AI_ASSISTANT",
+          "DOCUMENT_UPLOAD",
+          "ANALYTICS",
+          "EXPORT",
+          "TEAM_MEMBERS",
+          "API_ACCESS",
+          "CUSTOM_BRANDING",
+        ],
+        limits: {
+          documents: null,
+          knowledge_bases: 100,
+          team_members: 250,
+          ai_queries_month: 50000,
+          storage_mb: 512000,
+        },
+        active: true,
+        metadata: { system: true, paymentPagePlan: "enterprise" },
+        createdAt: now,
+        updatedAt: now,
+      },
     ];
-    for (const plan of plans) await insertPlanIfMissing(queryInterface, Sequelize, plan);
+
+    await upsertPlan(queryInterface, Sequelize, plans[0]);
+    await upsertPlan(queryInterface, Sequelize, plans[1], ["Pro"]);
+    await upsertPlan(queryInterface, Sequelize, plans[2]);
+    await upsertPlan(queryInterface, Sequelize, plans[3]);
+
+    const legacyPro = (
+      await queryInterface.sequelize.query(
+        "SELECT id FROM billing_plans WHERE name = :name LIMIT 1",
+        { replacements: { name: "Pro" }, type: Sequelize.QueryTypes.SELECT },
+      )
+    )[0];
+
+    const starter = (
+      await queryInterface.sequelize.query(
+        "SELECT id FROM billing_plans WHERE name = :name LIMIT 1",
+        { replacements: { name: "Starter" }, type: Sequelize.QueryTypes.SELECT },
+      )
+    )[0];
+
+    if (legacyPro && starter && legacyPro.id !== starter.id) {
+      await queryInterface.bulkUpdate(
+        "billing_plans",
+        { active: false },
+        { id: legacyPro.id },
+      );
+    }
   },
 
   async down(queryInterface) {
