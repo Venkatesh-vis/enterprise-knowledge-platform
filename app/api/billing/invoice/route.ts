@@ -5,7 +5,7 @@ import { errorResponse } from "@/lib/http/api-error";
 
 export const runtime = "nodejs";
 
-async function GET(request: Request) {
+async function handleGET(request: Request) {
   try {
     const url = new URL(request.url);
     const invoiceId = url.searchParams.get("invoiceId") ?? "";
@@ -17,7 +17,7 @@ async function GET(request: Request) {
   }
 }
 
-export const GET = withApiMiddleware(GET, {
+export const GET = withApiMiddleware(handleGET, {
   permission: "BILLING_READ",
   context: "GET app/api/billing/invoice/route.ts API",
 });
