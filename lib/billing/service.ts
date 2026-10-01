@@ -46,6 +46,38 @@ async function getEntitlementForOrganization(organizationId: string, transaction
   };
 }
 
+async function ensureRazorpayPlan(plan: any) {
+  const currentId = String(plan.razorpayPlanId ?? "").trim();
+  if (currentId && !currentId.startsWith("CONFIGURE_")) return { ...plan, razorpayPlanId: currentId };
+
+  const created = await RazorpayService.createPlan({
+    period: String(plan.billingInterval).toLowerCase() === "yearly" ? "yearly" : "monthly",
+    interval: 1,
+    item: {
+      name: String(plan.name),
+      amount: Number(plan.price),
+      currency: String(plan.currency),
+      description: plan.description ? String(plan.description) : String(plan.name),
+    },
+    notes: {
+      application: "enterprise-knowledge-platform",
+      planId: String(plan.id),
+    },
+  });
+
+  const razorpayPlanId = String(created.id ?? "");
+  if (!/^plan_[A-Za-z0-9]+$/.test(razorpayPlanId)) {
+    throw new BillingServiceError("PAYMENT_CREATION_FAILED", "Razorpay did not return a valid plan ID.", 502);
+  }
+
+  await BillingPlan.update(
+    { razorpayPlanId },
+    { where: { id: plan.id } },
+  );
+
+  return { ...plan, razorpayPlanId };
+}
+
 async function getIdempotencyRecord(auth: any, key: string, operation: string) {
   const clean = key.trim();
   if (!/^[A-Za-z0-9._:-]{8,191}$/.test(clean)) throw new BillingServiceError("INVALID_IDEMPOTENCY_KEY", "Invalid idempotency key.", 400);
@@ -80,9 +112,10 @@ export async function createSubscription(planId: string, idempotencyKey: string)
     return response;
   }
 
-  const plan = await BillingPlan.findOne({ where: { id: planId, active: true }, raw: true });
+  let plan = await BillingPlan.findOne({ where: { id: planId, active: true }, raw: true });
   if (!plan) throw new BillingServiceError("BILLING_PLAN_NOT_FOUND", "Billing plan not found.", 404);
   if (Number(plan.price) <= 0) throw new BillingServiceError("BILLING_PLAN_INACTIVE", "The selected plan does not require checkout.", 400);
+  plan = await ensureRazorpayPlan(plan);
 
   const active = await findCurrentSubscription(auth.organization.id);
   if (active && isSubscriptionEntitled(active)) throw new BillingServiceError("SUBSCRIPTION_ALREADY_ACTIVE", "An active subscription already exists.", 409);
@@ -114,11 +147,12 @@ export async function createSubscription(planId: string, idempotencyKey: string)
 
 export async function upgradeSubscription(planId: string) {
   const auth = await requirePermission("BILLING_MANAGE");
-  const targetPlan = await BillingPlan.findOne({ where: { id: planId, active: true }, raw: true });
+  let targetPlan = await BillingPlan.findOne({ where: { id: planId, active: true }, raw: true });
   if (!targetPlan) throw new BillingServiceError("BILLING_PLAN_NOT_FOUND", "Billing plan not found.", 404);
   if (Number(targetPlan.price) <= 0) throw new BillingServiceError("BILLING_PLAN_INACTIVE", "The selected plan does not require checkout.", 400);
 
   const subscription = await findCurrentSubscription(auth.organization.id);
+  targetPlan = await ensureRazorpayPlan(targetPlan);
   if (!subscription || !isSubscriptionEntitled(subscription)) {
     throw new BillingServiceError("SUBSCRIPTION_NOT_ACTIVE", "There is no active paid subscription to upgrade.", 409);
   }
