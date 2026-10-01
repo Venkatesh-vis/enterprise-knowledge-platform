@@ -14,7 +14,6 @@ import {
   UsageOverview,
   PricingPlans,
   InvoiceHistory,
-  BillingNotes,
 } from "./components";
 import type { Billing, BillingCycle, Plan } from "./components/billing-types";
 
@@ -274,7 +273,6 @@ export default function BillingPage() {
         }}
       />
 
-      <BillingNotes />
     </div>
   );
 }

@@ -29,7 +29,7 @@ export function InvoiceHistory({
   onClear,
 }: InvoiceHistoryProps) {
   return (
-    <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+    <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm p-5">
       <div className="border-b border-slate-200 px-6 py-5 sm:px-7">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="flex items-center gap-3">
