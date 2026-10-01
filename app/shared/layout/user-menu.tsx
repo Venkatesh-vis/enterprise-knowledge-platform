@@ -1,12 +1,15 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+
+import { apiRequest } from "@/app/shared/lib/api";
 
 import { useAuthStore } from "@/app/shared/store/auth-store";
 
 export default function UserMenu() {
   const [open, setOpen] = useState(false);
+  const [billingPlan, setBillingPlan] = useState<string | null>(null);
 
   const user = useAuthStore((state) => state.user);
   const role = useAuthStore((state) => state.membership?.role);
@@ -23,6 +26,29 @@ export default function UserMenu() {
   };
 
   const roleLabel = roleLabelMap[roleKey] ?? "Member";
+
+  const loadBillingPlan = useCallback(async () => {
+    try {
+      const response = await apiRequest<{ data: { plan: { name: string } } }>({
+        path: "/api/billing",
+      });
+      setBillingPlan(response.data.plan.name);
+    } catch {
+      setBillingPlan(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadBillingPlan();
+
+    const handleBillingUpdated = () => {
+      void loadBillingPlan();
+    };
+
+    window.addEventListener("billing:updated", handleBillingUpdated);
+    return () => window.removeEventListener("billing:updated", handleBillingUpdated);
+  }, [loadBillingPlan]);
+
 
   const initials = name
     .trim()
@@ -74,6 +100,12 @@ export default function UserMenu() {
             <p className="mt-0.5 truncate text-xs text-slate-500">
               {email}
             </p>
+
+            {billingPlan && (
+              <p className="mt-2 inline-flex w-fit rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+                Plan · {billingPlan}
+              </p>
+            )}
 
           </div>
 
