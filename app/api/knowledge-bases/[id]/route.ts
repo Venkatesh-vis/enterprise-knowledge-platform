@@ -5,7 +5,7 @@ import { deleteKnowledgeBase, getKnowledgeBase, updateKnowledgeBase } from "@/li
 
 type Context = { params: Promise<{ id: string }> };
 
-async function GET(_request: Request, context: Context) {
+async function handleGET(_request: Request, context: Context) {
   try {
     const { id } = await context.params;
     return NextResponse.json({ success: true, data: { knowledgeBase: await getKnowledgeBase(id) } });
@@ -14,7 +14,7 @@ async function GET(_request: Request, context: Context) {
   }
 }
 
-async function PATCH(request: Request, context: Context) {
+async function handlePATCH(request: Request, context: Context) {
   try {
     const { id } = await context.params;
     const body = await request.json();
@@ -27,7 +27,7 @@ async function PATCH(request: Request, context: Context) {
   }
 }
 
-async function DELETE(_request: Request, context: Context) {
+async function handleDELETE(_request: Request, context: Context) {
   try {
     const { id } = await context.params;
     return NextResponse.json({ success: true, data: await deleteKnowledgeBase(id) });
@@ -36,15 +36,15 @@ async function DELETE(_request: Request, context: Context) {
   }
 }
 
-export const GET = withApiMiddleware(GET, {
+export const GET = withApiMiddleware(handleGET, {
   permission: "KNOWLEDGE_BASE_READ",
   context: "GET app/api/knowledge-bases/[id]/route.ts API",
 });
-export const PATCH = withApiMiddleware(PATCH, {
+export const PATCH = withApiMiddleware(handlePATCH, {
   permission: "KNOWLEDGE_BASE_UPDATE",
   context: "PATCH app/api/knowledge-bases/[id]/route.ts API",
 });
-export const DELETE = withApiMiddleware(DELETE, {
+export const DELETE = withApiMiddleware(handleDELETE, {
   permission: "KNOWLEDGE_BASE_DELETE",
   context: "DELETE app/api/knowledge-bases/[id]/route.ts API",
 });
