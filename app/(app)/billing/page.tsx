@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 
 import { apiRequest } from "@/app/shared/lib/api";
 import { useAuthStore } from "@/app/shared/store/auth-store";
+import { useWorkspaceStore } from "@/app/shared/store/workspace-store";
 
 import {
   BillingHeader,
@@ -46,6 +47,8 @@ function loadRazorpay() {
 
 export default function BillingPage() {
   const user = useAuthStore((state) => state.user);
+  const workspace = useWorkspaceStore((state) => state.overview);
+  const workspaceLoading = useWorkspaceStore((state) => state.isLoading);
 
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -215,7 +218,7 @@ export default function BillingPage() {
     }
   };
 
-  if (loading) {
+  if (loading || workspaceLoading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="flex items-center gap-3 text-sm text-slate-500">
@@ -239,11 +242,12 @@ export default function BillingPage() {
         <>
           <BillingSummary
             billing={billing}
+            workspace={workspace}
             busy={busy}
             onCancel={() => void cancel()}
           />
 
-          <UsageOverview billing={billing} />
+          <UsageOverview billing={billing} workspace={workspace} />
         </>
       )}
 
