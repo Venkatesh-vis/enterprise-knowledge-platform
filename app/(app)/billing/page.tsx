@@ -204,7 +204,7 @@ export default function BillingPage() {
   };
 
   useEffect(() => {
-    void refresh(invoiceFrom, invoiceTo, true);
+    void refresh("", "", true);
   }, []);
 
   const checkout = async (planId: string) => {
