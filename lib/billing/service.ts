@@ -260,7 +260,17 @@ export async function cancelCurrentSubscription(cancelAtPeriodEnd = true) {
 export async function getBillingPayments() {
   const auth = await requirePermission("BILLING_READ");
   const rows = await BillingPayment.findAll({ where: { organizationId: auth.organization.id }, order: [["createdAt", "DESC"]], limit: 100, raw: true });
-  return rows.map((row: any) => ({ id: String(row.id), paymentId: String(row.razorpayPaymentId), amount: Number(row.amount), currency: String(row.currency), status: String(row.status), method: row.method, capturedAt: row.capturedAt }));
+  return rows.map((row: any) => ({
+    id: String(row.id),
+    paymentId: String(row.razorpayPaymentId),
+    invoiceId: row.razorpayInvoiceId ? String(row.razorpayInvoiceId) : null,
+    orderId: row.razorpayOrderId ? String(row.razorpayOrderId) : null,
+    amount: Number(row.amount),
+    currency: String(row.currency),
+    status: String(row.status),
+    method: row.method,
+    capturedAt: row.capturedAt,
+  }));
 }
 
 export { BILLING_FEATURES };
