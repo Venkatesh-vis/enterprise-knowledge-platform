@@ -45,7 +45,7 @@ function errorResponse(
   );
 }
 
-async function PATCH(
+async function handlePATCH(
   request: NextRequest,
   {
     params,
@@ -94,6 +94,6 @@ async function PATCH(
     return errorResponse(error);
   }
 }
-export const PATCH = withApiMiddleware(PATCH, {
+export const PATCH = withApiMiddleware(handlePATCH, {
   context: "PATCH app/api/notifications/[id]/route.ts API",
 });
