@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withApiMiddleware } from "@/lib/http/api-middleware";
 import { z } from "zod";
 
 import {
@@ -91,7 +92,7 @@ function errorResponse(error: unknown) {
   );
 }
 
-export async function GET(
+async function handleGET(
   _request: NextRequest,
   {
     params,
@@ -129,7 +130,7 @@ export async function GET(
   }
 }
 
-export async function PATCH(
+async function handlePATCH(
   request: NextRequest,
   {
     params,
@@ -191,7 +192,7 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
+async function handleDELETE(
   _request: NextRequest,
   {
     params,
@@ -230,3 +231,15 @@ export async function DELETE(
     return errorResponse(error);
   }
 }
+export const GET = withApiMiddleware(handleGET, {
+  permission: "USER_READ",
+  context: "GET app/api/users/[id]/route.ts API",
+});
+export const PATCH = withApiMiddleware(handlePATCH, {
+  permission: "USER_UPDATE",
+  context: "PATCH app/api/users/[id]/route.ts API",
+});
+export const DELETE = withApiMiddleware(handleDELETE, {
+  permission: "USER_DELETE",
+  context: "DELETE app/api/users/[id]/route.ts API",
+});

@@ -58,6 +58,7 @@ export function UserRemoveDialog({
         );
       }
 
+      window.dispatchEvent(new Event("workspace:changed"));
       onSuccess();
       onClose();
     } catch (caughtError) {

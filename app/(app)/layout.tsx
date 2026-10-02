@@ -4,6 +4,8 @@ import Header from "../shared/layout/header";
 import Sidebar from "../shared/layout/sidebar";
 
 import { AuthProvider } from "../shared/auth/auth-provider";
+import { WorkspaceSync } from "../shared/workspace";
+import { PlanLimitDialog } from "../shared/ui/plan-limit-dialog";
 
 import {
   getCurrentUser,
@@ -26,6 +28,8 @@ export default async function AppLayout({
   return (
     <AuthProvider initialAuth={currentUser}
     >
+      <WorkspaceSync />
+      <PlanLimitDialog />
       <div className="flex h-screen flex-col overflow-hidden bg-slate-50">
         <Header />
 

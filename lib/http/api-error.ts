@@ -5,16 +5,14 @@ import { InvitationServiceError } from "@/lib/invitations/service";
 import { DocumentServiceError } from "@/lib/documents/service";
 import { DocumentValidationError } from "@/lib/documents/validation";
 import { KnowledgeBaseServiceError } from "@/lib/knowledge-bases/service";
+import { BillingServiceError } from "@/lib/billing/errors";
 
 export function errorResponse(error: unknown, context: string) {
-  if (
-    error instanceof AuthenticationError ||
-    error instanceof AuthorizationError ||
-    error instanceof InvitationServiceError ||
-    error instanceof DocumentServiceError ||
-    error instanceof DocumentValidationError ||
-    error instanceof KnowledgeBaseServiceError
-  ) {
+  if (error instanceof BillingServiceError) {
+    return NextResponse.json({ success: false, error: { code: error.code, message: error.message, ...(error.details ?? {}) }, message: error.message }, { status: error.status });
+  }
+
+  if (error instanceof AuthenticationError || error instanceof AuthorizationError || error instanceof InvitationServiceError || error instanceof DocumentServiceError || error instanceof DocumentValidationError || error instanceof KnowledgeBaseServiceError) {
     return NextResponse.json({ success: false, message: error.message }, { status: error.status });
   }
 

@@ -9,6 +9,13 @@ import Permission from "./permission";
 import RolePermission from "./role-permission";
 import AuditLog from "./audit-log";
 import Invitation from "./invitation";
+import BillingPlan from "./billing-plan";
+import Subscription from "./subscription";
+import BillingPayment from "./billing-payment";
+import BillingIdempotencyKey from "./billing-idempotency-key";
+import BillingWebhookEvent from "./billing-webhook-event";
+import BillingUsageCounter from "./billing-usage-counter";
+import BillingAuditEvent from "./billing-audit-event";
 
 User.hasMany(OrganizationMembership, { foreignKey: "userId", as: "memberships" });
 Organization.hasMany(OrganizationMembership, { foreignKey: "organizationId", as: "memberships" });
@@ -27,46 +34,32 @@ AuditLog.belongsTo(User, { foreignKey: "targetUserId", as: "targetUser" });
 AuditLog.belongsTo(Organization, { foreignKey: "organizationId", as: "organization" });
 User.hasMany(AuditLog, { foreignKey: "actorUserId", as: "auditLogs" });
 Organization.hasMany(AuditLog, { foreignKey: "organizationId", as: "auditLogs" });
-
 Invitation.belongsTo(Organization, { foreignKey: "organizationId", as: "organization" });
 Invitation.belongsTo(User, { foreignKey: "invitedByUserId", as: "invitedBy" });
 Invitation.belongsTo(Role, { foreignKey: "roleId", as: "role" });
 Organization.hasMany(Invitation, { foreignKey: "organizationId", as: "invitations" });
-
 Organization.hasMany(Document, { foreignKey: "organizationId", as: "documents" });
 Document.belongsTo(Organization, { foreignKey: "organizationId", as: "organization" });
 Document.belongsTo(User, { foreignKey: "uploadedByUserId", as: "uploadedByUser" });
 User.hasMany(Document, { foreignKey: "uploadedByUserId", as: "documents" });
-
 Organization.hasMany(KnowledgeBase, { foreignKey: "organizationId", as: "knowledgeBases" });
 KnowledgeBase.belongsTo(Organization, { foreignKey: "organizationId", as: "organization" });
 KnowledgeBase.belongsTo(User, { foreignKey: "createdByUserId", as: "createdBy" });
 User.hasMany(KnowledgeBase, { foreignKey: "createdByUserId", as: "knowledgeBasesCreated" });
+Document.belongsToMany(KnowledgeBase, { through: DocumentKnowledgeBase, foreignKey: "documentId", otherKey: "knowledgeBaseId", as: "knowledgeBases" });
+KnowledgeBase.belongsToMany(Document, { through: DocumentKnowledgeBase, foreignKey: "knowledgeBaseId", otherKey: "documentId", as: "documents" });
 
-Document.belongsToMany(KnowledgeBase, {
-  through: DocumentKnowledgeBase,
-  foreignKey: "documentId",
-  otherKey: "knowledgeBaseId",
-  as: "knowledgeBases",
-});
+Subscription.belongsTo(BillingPlan, { foreignKey: "planId", as: "plan" });
+BillingPlan.hasMany(Subscription, { foreignKey: "planId", as: "subscriptions" });
+Organization.hasMany(Subscription, { foreignKey: "organizationId", as: "subscriptions" });
+Subscription.belongsTo(Organization, { foreignKey: "organizationId", as: "organization" });
+Organization.hasMany(BillingPayment, { foreignKey: "organizationId", as: "billingPayments" });
+BillingPayment.belongsTo(Organization, { foreignKey: "organizationId", as: "organization" });
+Subscription.hasMany(BillingPayment, { foreignKey: "subscriptionId", as: "payments" });
+BillingPayment.belongsTo(Subscription, { foreignKey: "subscriptionId", as: "subscription" });
+User.hasMany(BillingPayment, { foreignKey: "userId", as: "billingPayments" });
+BillingPayment.belongsTo(User, { foreignKey: "userId", as: "user" });
+Organization.hasMany(BillingIdempotencyKey, { foreignKey: "organizationId", as: "billingIdempotencyKeys" });
+Organization.hasMany(BillingWebhookEvent, { foreignKey: "organizationId", as: "billingWebhookEvents" });
 
-KnowledgeBase.belongsToMany(Document, {
-  through: DocumentKnowledgeBase,
-  foreignKey: "knowledgeBaseId",
-  otherKey: "documentId",
-  as: "documents",
-});
-
-export {
-  User,
-  Organization,
-  OrganizationMembership,
-  Document,
-  KnowledgeBase,
-  DocumentKnowledgeBase,
-  Role,
-  Permission,
-  RolePermission,
-  AuditLog,
-  Invitation,
-};
+export { User, Organization, OrganizationMembership, Document, KnowledgeBase, DocumentKnowledgeBase, Role, Permission, RolePermission, AuditLog, Invitation, BillingPlan, Subscription, BillingPayment, BillingIdempotencyKey, BillingWebhookEvent, BillingUsageCounter, BillingAuditEvent };

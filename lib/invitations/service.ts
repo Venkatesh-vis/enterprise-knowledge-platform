@@ -10,6 +10,7 @@ import { canAssignRole, requirePermission } from "@/lib/auth/authorization";
 import { getCurrentUser } from "@/lib/auth/get-current-user";
 import { createAuditLog } from "@/lib/audit/audit-service";
 import { sendInvitationEmail } from "@/lib/email/invitation-email";
+import { assertPlanResourceAvailable } from "@/lib/billing/guards";
 
 import {
   INVITATION_MAX_IMPORT_ROWS,
@@ -382,6 +383,7 @@ export async function createInvitation(
 ) {
   const { auth, email, name, role } =
     await validateCreate(input);
+  await assertPlanResourceAvailable(auth.organization.id, "team_members", 1);
   const invitationToken =
     createInvitationToken();
 
@@ -935,6 +937,13 @@ export async function importInvitations(
       `A maximum of ${INVITATION_MAX_IMPORT_ROWS} invitations can be imported at once.`,
     );
   }
+
+  const auth = await requirePermission("INVITATION_IMPORT");
+  await assertPlanResourceAvailable(
+    auth.organization.id,
+    "team_members",
+    inputs.length,
+  );
 
   const created: InvitationListItem[] = [];
   const failedEmails: string[] = [];

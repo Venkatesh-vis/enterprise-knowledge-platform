@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
+import { withApiMiddleware } from "@/lib/http/api-middleware";
 import { errorResponse } from "@/lib/http/api-error";
 import { revokeInvitation } from "@/lib/invitations/service";
 
-export async function POST(_request: Request, context: { params: Promise<{ id: string }> }) {
+async function handlePOST(_request: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
     return NextResponse.json({ success: true, message: "Invitation revoked.", data: await revokeInvitation(id) });
@@ -10,3 +11,8 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
     return errorResponse(error, "Revoke invitation API");
   }
 }
+
+export const POST = withApiMiddleware(handlePOST, {
+  permission: "INVITATION_REVOKE",
+  context: "POST app/api/invitations/[id]/revoke/route.ts API",
+});

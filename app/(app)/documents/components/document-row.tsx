@@ -56,6 +56,7 @@ export function DocumentRow({
       }
 
       setConfirmOpen(false);
+      window.dispatchEvent(new Event("workspace:changed"));
       onDeleted(result.data?.documentId ?? document.id);
     } catch (caughtError) {
       setError(

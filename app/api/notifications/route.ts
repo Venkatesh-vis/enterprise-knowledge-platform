@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withApiMiddleware } from "@/lib/http/api-middleware";
 
 import {
   AuthorizationError,
@@ -45,7 +46,7 @@ function errorResponse(
   );
 }
 
-export async function GET() {
+async function handleGET() {
   try {
     const data =
       await getNotifications();
@@ -59,7 +60,7 @@ export async function GET() {
   }
 }
 
-export async function PATCH(
+async function handlePATCH(
   request: NextRequest,
 ) {
   try {
@@ -94,3 +95,9 @@ export async function PATCH(
     return errorResponse(error);
   }
 }
+export const GET = withApiMiddleware(handleGET, {
+  context: "GET app/api/notifications/route.ts API",
+});
+export const PATCH = withApiMiddleware(handlePATCH, {
+  context: "PATCH app/api/notifications/route.ts API",
+});

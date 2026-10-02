@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withApiMiddleware } from "@/lib/http/api-middleware";
 
 import {
   AuthorizationError,
@@ -44,7 +45,7 @@ function errorResponse(
   );
 }
 
-export async function PATCH(
+async function handlePATCH(
   request: NextRequest,
   {
     params,
@@ -93,3 +94,6 @@ export async function PATCH(
     return errorResponse(error);
   }
 }
+export const PATCH = withApiMiddleware(handlePATCH, {
+  context: "PATCH app/api/notifications/[id]/route.ts API",
+});

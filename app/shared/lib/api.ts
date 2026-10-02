@@ -3,7 +3,9 @@ import { redirect } from "next/navigation";
 
 import { useAuthStore } from "@/app/shared/store/auth-store";
 
-const api = axios.create();
+const api = axios.create({
+  withCredentials: true,
+});
 
 type ApiRequestOptions = {
   path: string;
@@ -48,15 +50,45 @@ export async function apiRequest<T>({
       redirect("/login");
     }
 
-    if (
-      axios.isAxiosError(error) &&
-      error.response?.data?.message
-    ) {
-      throw new Error(
-        String(error.response.data.message),
-      );
+    if (typeof window !== "undefined" && axios.isAxiosError(error) && error.response?.status === 403) {
+      const payload = error.response.data as {
+        error?: {
+          code?: string;
+          message?: string;
+          resource?: string;
+          used?: number;
+          limit?: number;
+          requested?: number;
+          planName?: string;
+          feature?: string;
+          billingPath?: string;
+        };
+        message?: string;
+      };
+
+      const details = payload?.error;
+
+      if (details?.code === "PLAN_LIMIT_REACHED" || details?.code === "FEATURE_NOT_AVAILABLE") {
+        window.dispatchEvent(
+          new CustomEvent("billing:limit-reached", {
+            detail: {
+              code: details.code,
+              message: details.message ?? payload.message ?? "Your current plan does not allow this action.",
+              resource: details.resource,
+              used: details.used,
+              limit: details.limit,
+              requested: details.requested,
+              planName: details.planName,
+              feature: details.feature,
+              billingPath: details.billingPath ?? "/billing",
+            },
+          }),
+        );
+      }
     }
 
+    // Preserve the original Axios error so callers can inspect the
+    // server status and response body instead of receiving a generic Error.
     throw error;
   }
 }

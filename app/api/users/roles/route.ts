@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { withApiMiddleware } from "@/lib/http/api-middleware";
 
 import {
   requirePermission,
@@ -7,7 +8,7 @@ import {
 
 import Role from "@/db/models/role";
 
-export async function GET() {
+async function handleGET() {
   try {
     await requirePermission(
       "USER_READ",
@@ -75,3 +76,7 @@ export async function GET() {
     );
   }
 }
+export const GET = withApiMiddleware(handleGET, {
+  permission: "USER_READ",
+  context: "GET app/api/users/roles/route.ts API",
+});
