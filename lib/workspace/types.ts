@@ -5,4 +5,7 @@ export type WorkspaceOverview = {
   storageBytes: number;
   storageMb: number;
   aiQueriesMonth: number;
+  aiCreditsUsed: number;
+  aiCreditsLimit: number | null;
+  aiCreditsRemaining: number | null;
 };
