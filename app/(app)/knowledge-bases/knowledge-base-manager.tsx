@@ -1,6 +1,13 @@
 "use client";
 
-import { BookOpen, Plus, X } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  BookOpen,
+  FileText,
+  Layers3,
+  Plus,
+  X,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { apiRequest } from "@/app/shared/lib/api";
@@ -179,32 +186,72 @@ export function KnowledgeBaseManager({
   }
 
   const formBusy = busyAction?.type === formMode && formMode !== null;
+  const documentCount = knowledgeBases.reduce(
+    (total, knowledgeBase) => total + knowledgeBase.documentCount,
+    0,
+  );
 
   return (
-    <div className="space-y-8">
-      <header className="rounded-3xl border border-slate-200 bg-white px-6 py-7 shadow-sm">
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-          <div className="flex min-w-0 items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
-              <BookOpen className="h-6 w-6" aria-hidden="true" />
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+    <div className="space-y-7 sm:space-y-8">
+      <motion.header
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="relative overflow-hidden rounded-3xl border border-slate-200/80 bg-slate-950 px-6 py-7 text-white shadow-lg shadow-slate-950/10 sm:px-8 sm:py-8"
+      >
+        <div
+          aria-hidden="true"
+          className="absolute -right-20 -top-28 h-72 w-72 rounded-full bg-indigo-500/20 blur-3xl"
+        />
+        <div
+          aria-hidden="true"
+          className="absolute -bottom-28 left-1/3 h-60 w-60 rounded-full bg-sky-400/10 blur-3xl"
+        />
+
+        <div className="relative flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/10 shadow-inner">
+                <BookOpen className="h-5 w-5 text-white" aria-hidden="true" />
+              </div>
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-300">
                 Knowledge management
-              </p>
-              <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
-                Knowledge Bases
-              </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                Organize documents into focused knowledge spaces for your team.
-              </p>
+              </span>
+            </div>
+
+            <h1 className="mt-5 text-2xl font-semibold tracking-tight sm:text-3xl">
+              Knowledge Bases
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300 sm:text-[15px]">
+              Organize documents into focused knowledge spaces your team can
+              discover, maintain, and reuse.
+            </p>
+
+            <div className="mt-6 flex flex-wrap gap-2.5">
+              <div className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-xs text-slate-300">
+                <Layers3 className="h-3.5 w-3.5 text-slate-400" />
+                <span className="font-semibold text-white">
+                  {knowledgeBases.length}
+                </span>
+                {knowledgeBases.length === 1
+                  ? "knowledge base"
+                  : "knowledge bases"}
+              </div>
+              <div className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-xs text-slate-300">
+                <FileText className="h-3.5 w-3.5 text-slate-400" />
+                <span className="font-semibold text-white">
+                  {documentCount}
+                </span>
+                {documentCount === 1 ? "document" : "documents"} organized
+              </div>
             </div>
           </div>
 
           {initialData.permissions.canCreate && (
             <Button
               onClick={formMode === "create" ? closeForm : openCreateForm}
-              variant={formMode === "create" ? "ghost" : "primary"}
+              variant={formMode === "create" ? "secondary" : "primary"}
+              className="relative shrink-0 shadow-lg shadow-black/20"
             >
               {formMode === "create" ? (
                 <X className="mr-1.5 h-4 w-4" />
@@ -215,26 +262,33 @@ export function KnowledgeBaseManager({
             </Button>
           )}
         </div>
-      </header>
+      </motion.header>
 
-      {error && (
-        <p
-          role="alert"
-          className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
-        >
-          {error}
-        </p>
-      )}
+      <AnimatePresence initial={false}>
+        {error && (
+          <motion.p
+            role="alert"
+            initial={{ opacity: 0, height: 0, y: -6 }}
+            animate={{ opacity: 1, height: "auto", y: 0 }}
+            exit={{ opacity: 0, height: 0, y: -6 }}
+            className="overflow-hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+          >
+            {error}
+          </motion.p>
+        )}
+      </AnimatePresence>
 
-      {formMode && (
-        <KnowledgeBaseForm
-          mode={formMode}
-          knowledgeBase={editingKnowledgeBase ?? undefined}
-          busy={formBusy}
-          onSubmit={submitForm}
-          onCancel={closeForm}
-        />
-      )}
+      <AnimatePresence initial={false}>
+        {formMode && (
+          <KnowledgeBaseForm
+            mode={formMode}
+            knowledgeBase={editingKnowledgeBase ?? undefined}
+            busy={formBusy}
+            onSubmit={submitForm}
+            onCancel={closeForm}
+          />
+        )}
+      </AnimatePresence>
 
       <KnowledgeBaseGrid
         knowledgeBases={knowledgeBases}
