@@ -1,46 +1,30 @@
 "use client";
 
-import { FileText, Trash2, Upload } from "lucide-react";
+import { BookOpen, Plus, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 
 import { apiRequest } from "@/app/shared/lib/api";
 import { Button } from "@/app/shared/ui/button";
 import { ConfirmDialog } from "@/app/shared/ui/confirm-dialog";
-import { Input } from "@/app/shared/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-  TableScroll,
-} from "@/app/shared/ui/table";
 
-type Item = {
-  id: string;
-  name: string;
-  slug: string;
-  description: string | null;
-  documentCount: number;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type Data = {
-  knowledgeBases: Item[];
-  permissions: {
-    canCreate: boolean;
-    canUpdate: boolean;
-    canDelete: boolean;
-  };
-};
+import { KnowledgeBaseForm } from "./knowledge-base-form";
+import { KnowledgeBaseGrid } from "./knowledge-base-grid";
+import type {
+  KnowledgeBase,
+  KnowledgeBaseFormValues,
+  KnowledgeBasePageData,
+} from "./knowledge-base-types";
 
 type CreateResponse = {
   success: boolean;
   message?: string;
-  data: { knowledgeBase: Item };
+  data: { knowledgeBase: KnowledgeBase };
+};
+
+type UpdateResponse = {
+  success: boolean;
+  message?: string;
+  data: { knowledgeBase: KnowledgeBase };
 };
 
 type DeleteResponse = {
@@ -49,77 +33,133 @@ type DeleteResponse = {
   data: { knowledgeBaseId: string };
 };
 
+type BusyAction = {
+  type: "create" | "edit" | "delete";
+  knowledgeBaseId?: string;
+} | null;
+
 export function KnowledgeBaseManager({
   initialData,
 }: {
-  initialData: Data;
+  initialData: KnowledgeBasePageData;
 }) {
-  const router = useRouter();
-  const [knowledgeBases, setKnowledgeBases] = useState(initialData.knowledgeBases);
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [knowledgeBases, setKnowledgeBases] = useState(
+    initialData.knowledgeBases,
+  );
+  const [formMode, setFormMode] = useState<"create" | "edit" | null>(null);
+  const [editingKnowledgeBase, setEditingKnowledgeBase] =
+    useState<KnowledgeBase | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [error, setError] = useState("");
+  const [busyAction, setBusyAction] = useState<BusyAction>(null);
 
   useEffect(() => {
     setKnowledgeBases(initialData.knowledgeBases);
   }, [initialData.knowledgeBases]);
 
-  async function create() {
-    const value = name.trim();
+  function openCreateForm() {
+    setError("");
+    setEditingKnowledgeBase(null);
+    setFormMode("create");
+  }
 
-    if (!value) {
-      setError("Knowledge base name is required.");
-      return;
-    }
+  function openEditForm(knowledgeBase: KnowledgeBase) {
+    setError("");
+    setEditingKnowledgeBase(knowledgeBase);
+    setFormMode("edit");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
-    setBusy(true);
+  function closeForm() {
+    if (busyAction) return;
+    setFormMode(null);
+    setEditingKnowledgeBase(null);
+  }
+
+  async function submitForm(values: KnowledgeBaseFormValues) {
+    const isEdit = formMode === "edit";
+
+    if (!formMode || (isEdit && !editingKnowledgeBase)) return;
+
+    const knowledgeBaseId = editingKnowledgeBase?.id;
+
+    setBusyAction({
+      type: isEdit ? "edit" : "create",
+      knowledgeBaseId,
+    });
     setError("");
 
     try {
-      const result = await apiRequest<CreateResponse>({
-        path: "/api/knowledge-bases",
-        method: "POST",
-        body: {
-          name: value,
-          description: description.trim(),
-        },
-      });
+      if (isEdit && knowledgeBaseId) {
+        const result = await apiRequest<UpdateResponse>({
+          path: `/api/knowledge-bases/${encodeURIComponent(knowledgeBaseId)}`,
+          method: "PATCH",
+          body: values,
+        });
 
-      if (!result.success) {
-        throw new Error(result.message ?? "Unable to create knowledge base.");
+        if (!result.success) {
+          throw new Error(result.message ?? "Unable to update knowledge base.");
+        }
+
+        setKnowledgeBases((current) =>
+          current.map((item) =>
+            item.id === result.data.knowledgeBase.id
+              ? result.data.knowledgeBase
+              : item,
+          ),
+        );
+      } else {
+        const result = await apiRequest<CreateResponse>({
+          path: "/api/knowledge-bases",
+          method: "POST",
+          body: values,
+        });
+
+        if (!result.success) {
+          throw new Error(result.message ?? "Unable to create knowledge base.");
+        }
+
+        setKnowledgeBases((current) => [
+          result.data.knowledgeBase,
+          ...current,
+        ]);
       }
 
-      setKnowledgeBases((current) => [result.data.knowledgeBase, ...current]);
       window.dispatchEvent(new Event("workspace:changed"));
-      setName("");
-      setDescription("");
+      setFormMode(null);
+      setEditingKnowledgeBase(null);
     } catch (caughtError) {
       setError(
         caughtError instanceof Error
           ? caughtError.message
-          : "Unable to create knowledge base.",
+          : isEdit
+            ? "Unable to update knowledge base."
+            : "Unable to create knowledge base.",
       );
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
 
   async function remove() {
     if (!deleteId) return;
 
-    setBusy(true);
+    const knowledgeBaseId = deleteId;
+
+    setBusyAction({ type: "delete", knowledgeBaseId });
     setError("");
 
     try {
       const result = await apiRequest<DeleteResponse>({
-        path: `/api/knowledge-bases/${encodeURIComponent(deleteId)}`,
+        path: `/api/knowledge-bases/${encodeURIComponent(knowledgeBaseId)}`,
         method: "DELETE",
       });
 
       if (!result.success) {
-        throw new Error(result.message ?? "Unable to delete knowledge base.");
+        throw new Error(
+          result.message ?? "Unable to delete knowledge base.",
+        );
       }
 
       setKnowledgeBases((current) =>
@@ -134,137 +174,82 @@ export function KnowledgeBaseManager({
           : "Unable to delete knowledge base.",
       );
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
 
+  const formBusy = busyAction?.type === formMode && formMode !== null;
+
   return (
     <div className="space-y-8">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-950">
-          Knowledge Bases
-        </h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-          Organize documents into separate retrieval contexts.
-        </p>
+      <header className="rounded-3xl border border-slate-200 bg-white px-6 py-7 shadow-sm">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex min-w-0 items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+              <BookOpen className="h-6 w-6" aria-hidden="true" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                Knowledge management
+              </p>
+              <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
+                Knowledge Bases
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+                Organize documents into focused knowledge spaces for your team.
+              </p>
+            </div>
+          </div>
+
+          {initialData.permissions.canCreate && (
+            <Button
+              onClick={formMode === "create" ? closeForm : openCreateForm}
+              variant={formMode === "create" ? "ghost" : "primary"}
+            >
+              {formMode === "create" ? (
+                <X className="mr-1.5 h-4 w-4" />
+              ) : (
+                <Plus className="mr-1.5 h-4 w-4" />
+              )}
+              {formMode === "create" ? "Close" : "New knowledge base"}
+            </Button>
+          )}
+        </div>
       </header>
 
       {error && (
-        <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <p
+          role="alert"
+          className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+        >
           {error}
         </p>
       )}
 
-      {initialData.permissions.canCreate && (
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-sm font-semibold text-slate-900">Create knowledge base</h2>
-          <div className="mt-4 grid gap-3 md:grid-cols-[1fr_1.5fr_auto] md:items-end">
-            <div>
-              <label className="text-sm font-medium text-slate-700">Name</label>
-              <Input
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="Engineering"
-                className="mt-2"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-slate-700">Description</label>
-              <Input
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                placeholder="Engineering documentation"
-                className="mt-2"
-              />
-            </div>
-            <Button onClick={create} disabled={busy}>
-              {busy ? "Creating…" : "Create"}
-            </Button>
-          </div>
-        </section>
+      {formMode && (
+        <KnowledgeBaseForm
+          mode={formMode}
+          knowledgeBase={editingKnowledgeBase ?? undefined}
+          busy={formBusy}
+          onSubmit={submitForm}
+          onCancel={closeForm}
+        />
       )}
 
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        {knowledgeBases.length ? (
-          <TableScroll>
-            <Table className="min-w-[980px]">
-              <TableHeader>
-                <tr>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Documents</TableHead>
-                  <TableHead>Updated</TableHead>
-                  <TableHead className="min-w-[280px] text-right">Actions</TableHead>
-                </tr>
-              </TableHeader>
-              <TableBody>
-                {knowledgeBases.map((base) => (
-                  <TableRow key={base.id}>
-                    <TableCell>
-                      <div>
-                        <p className="font-semibold text-slate-950">{base.name}</p>
-                        <p className="mt-0.5 text-xs text-slate-400">/{base.slug}</p>
-                      </div>
-                    </TableCell>
-                    <TableCell className="max-w-[360px] text-slate-500">
-                      <span className="line-clamp-2">{base.description || "—"}</span>
-                    </TableCell>
-                    <TableCell className="font-medium text-slate-600">
-                      {base.documentCount}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-slate-500">
-                      {new Date(base.updatedAt).toLocaleDateString("en-IN")}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <Button
-                          variant="ghost"
-                          className="h-9 px-2.5 text-xs"
-                          onClick={() =>
-                            router.push(
-                              `/documents?knowledgeBaseId=${encodeURIComponent(base.id)}`,
-                            )
-                          }
-                        >
-                          <FileText className="mr-1.5 h-3.5 w-3.5" />
-                          Documents
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          className="h-9 px-2.5 text-xs"
-                          onClick={() =>
-                            router.push(
-                              `/documents/upload?knowledgeBaseId=${encodeURIComponent(base.id)}`,
-                            )
-                          }
-                        >
-                          <Upload className="mr-1.5 h-3.5 w-3.5" />
-                          Upload
-                        </Button>
-                        {initialData.permissions.canDelete && (
-                          <Button
-                            variant="ghost"
-                            className="h-9 px-2.5 text-xs text-red-600 hover:bg-red-50"
-                            onClick={() => setDeleteId(base.id)}
-                            disabled={busy}
-                          >
-                            <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                            Delete
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableScroll>
-        ) : (
-          <div className="px-6 py-16 text-center text-sm text-slate-500">
-            No knowledge bases yet.
-          </div>
-        )}
-      </section>
+      <KnowledgeBaseGrid
+        knowledgeBases={knowledgeBases}
+        permissions={initialData.permissions}
+        query={query}
+        onQueryChange={setQuery}
+        onEdit={openEditForm}
+        onDelete={setDeleteId}
+        busyKnowledgeBaseId={busyAction?.knowledgeBaseId}
+        busyAction={
+          busyAction?.type === "edit" || busyAction?.type === "delete"
+            ? busyAction.type
+            : null
+        }
+      />
 
       <ConfirmDialog
         open={Boolean(deleteId)}
@@ -272,8 +257,8 @@ export function KnowledgeBaseManager({
         description="Documents will not be deleted. Only their association with this knowledge base will be removed."
         confirmLabel="Delete knowledge base"
         danger
-        busy={busy}
-        onClose={() => !busy && setDeleteId(null)}
+        busy={busyAction?.type === "delete"}
+        onClose={() => busyAction?.type !== "delete" && setDeleteId(null)}
         onConfirm={remove}
       />
     </div>
