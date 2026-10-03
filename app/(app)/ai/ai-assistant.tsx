@@ -2,8 +2,6 @@
 
 import {
   Bot,
-  Check,
-  ChevronDown,
   Copy,
   FileText,
   MessageSquarePlus,
@@ -23,6 +21,8 @@ import { Badge } from "@/app/shared/ui/badge";
 import { Button } from "@/app/shared/ui/button";
 import { EmptyState } from "@/app/shared/ui/empty-state";
 import { Input } from "@/app/shared/ui/input";
+import { Select } from "@/app/shared/ui/select";
+import { Textarea } from "@/app/shared/ui/textarea";
 
 import {
   assistantConversations as initialConversations,
@@ -383,38 +383,33 @@ export function AIAssistant() {
         </div>
 
         <div className="hidden items-center gap-2 sm:flex">
-          <div className="relative">
-            <select
-              value={selectedKnowledgeBase?.id ?? ""}
-              onChange={(event) => {
-                setSelectedKnowledgeBaseId(event.target.value);
-                const next = conversations.find(
-                  (conversation) => conversation.id === activeConversationId,
+          <Select
+            value={selectedKnowledgeBase?.id ?? ""}
+            onValueChange={(value) => {
+              setSelectedKnowledgeBaseId(value);
+              const next = conversations.find(
+                (conversation) => conversation.id === activeConversationId,
+              );
+              if (next) {
+                setConversations((current) =>
+                  current.map((conversation) =>
+                    conversation.id === activeConversationId
+                      ? {
+                          ...conversation,
+                          knowledgeBaseId: value,
+                        }
+                      : conversation,
+                  ),
                 );
-                if (next) {
-                  setConversations((current) =>
-                    current.map((conversation) =>
-                      conversation.id === activeConversationId
-                        ? {
-                            ...conversation,
-                            knowledgeBaseId: event.target.value,
-                          }
-                        : conversation,
-                    ),
-                  );
-                }
-              }}
-              aria-label="Select knowledge base"
-              className="h-9 appearance-none rounded-lg border border-slate-200 bg-white pl-3 pr-8 text-xs font-medium text-slate-700 outline-none hover:border-slate-300 focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
-            >
-              {assistantKnowledgeBases.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-          </div>
+              }
+            }}
+            options={assistantKnowledgeBases.map((item) => ({
+              value: item.id,
+              label: item.name,
+            }))}
+            aria-label="Select knowledge base"
+            triggerClassName="h-9 w-56 text-xs"
+          />
 
           <Button variant="secondary" onClick={createConversation}>
             <MessageSquarePlus className="mr-1.5 h-4 w-4" />
@@ -588,7 +583,7 @@ export function AIAssistant() {
               className="mx-auto w-full max-w-4xl"
             >
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2 shadow-sm focus-within:border-slate-300 focus-within:ring-2 focus-within:ring-slate-100">
-                <textarea
+                <Textarea
                   ref={inputRef}
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
@@ -604,7 +599,7 @@ export function AIAssistant() {
                   rows={2}
                   placeholder="Ask a question about your organization’s knowledge..."
                   aria-label="Ask the AI assistant"
-                  className="min-h-20 w-full resize-none border-0 bg-transparent px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400"
+                  className="min-h-20 resize-none border-0 bg-transparent px-3 py-2 shadow-none focus:border-transparent focus:ring-0"
                 />
                 <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-2 pt-2">
                   <div className="flex items-center gap-2 text-[10px] text-slate-400">
