@@ -110,10 +110,7 @@ export function AIAssistant() {
     setMobileSources(null);
   }
 
-  function appendDummyResponse(
-    conversationId: string,
-    question: string,
-  ) {
+  function getDummyResponse(question: string) {
     const normalized = question.toLowerCase();
     let answer =
       "I found relevant information in your selected knowledge base. This dummy response will be replaced by the real RAG pipeline.";
@@ -177,6 +174,14 @@ export function AIAssistant() {
       ];
     }
 
+    return { answer, sources };
+  }
+
+  function appendDummyResponse(
+    conversationId: string,
+    question: string,
+  ) {
+    const { answer, sources } = getDummyResponse(question);
     const message: AssistantMessage = {
       id: "assistant-" + Date.now(),
       role: "assistant",
@@ -333,9 +338,27 @@ export function AIAssistant() {
     );
 
     window.setTimeout(() => {
-      appendDummyResponse(
-        activeConversation.id,
-        previousUserMessage.content,
+      const { answer, sources } = getDummyResponse(previousUserMessage.content);
+      setConversations((current) =>
+        current.map((conversation) =>
+          conversation.id === activeConversation.id
+            ? {
+                ...conversation,
+                messages: conversation.messages.map((message) =>
+                  message.id === messageId
+                    ? {
+                        ...message,
+                        status: "complete" as const,
+                        content: answer,
+                        sources,
+                        createdAt: nowLabel(),
+                        feedback: null,
+                      }
+                    : message,
+                ),
+              }
+            : conversation,
+        ),
       );
     }, 450);
   }
