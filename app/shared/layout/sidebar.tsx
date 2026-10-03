@@ -180,8 +180,6 @@ export default function Sidebar() {
             </p>
           </div>
         </div>
-
-        <AiCreditsMeter />
       </div>
 
       <nav
@@ -216,6 +214,7 @@ export default function Sidebar() {
           ))}
         </div>
       </nav>
+      <AiCreditsMeter />
     </aside>
   );
 }

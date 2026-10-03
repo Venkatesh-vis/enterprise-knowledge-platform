@@ -37,8 +37,7 @@ export default function AiCreditsMeter() {
   const used = Math.max(0, overview.aiCreditsUsed);
   const limit = overview.aiCreditsLimit;
   const unlimited = limit === null;
-  const progress =
-    unlimited || limit <= 0 ? 0 : Math.min(100, (used / limit) * 100);
+  const progress = unlimited || limit <= 0 ? 0 : Math.min(100, (used / limit) * 100);
   const isNearLimit = !unlimited && progress >= 80;
   const exhausted = !unlimited && (limit <= 0 || used >= limit);
 
