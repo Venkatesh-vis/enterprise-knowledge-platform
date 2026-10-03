@@ -74,7 +74,6 @@ const workspaceItems: NavigationItem[] = [
     href: "/ai",
     icon: Bot,
     permission: "AI_USE",
-    disabled: true,
   },
 ];
 
