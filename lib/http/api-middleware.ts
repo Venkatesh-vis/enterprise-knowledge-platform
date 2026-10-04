@@ -3,6 +3,7 @@ import type { Permission } from "@/app/shared/lib/permissions";
 import { requireAnyPermission, requireAuth, requirePermission } from "@/lib/auth/authorization";
 import type { BillingFeature, BillingResource } from "@/lib/billing/constants";
 import { assertPlanFeature, assertPlanResourceAvailable } from "@/lib/billing/guards";
+import { checkApiRateLimit } from "./api-rate-limit";
 import { errorResponse } from "./api-error";
 
 type ApiMiddlewareOptions = {
@@ -15,9 +16,21 @@ type ApiMiddlewareOptions = {
 
 type ApiHandler<Context = unknown> = (request: Request, context: Context, auth: AuthSnapshot) => Promise<Response>;
 
+const DEFAULT_RATE_LIMIT = {
+  limit: 120,
+  windowSeconds: 60,
+  keyPrefix: "api",
+};
+
 export function withApiMiddleware<Context = unknown>(handler: ApiHandler<Context>, options: ApiMiddlewareOptions) {
   return async (request: Request, context: Context) => {
     try {
+      const rateLimitResponse = await checkApiRateLimit(request, DEFAULT_RATE_LIMIT);
+
+      if (rateLimitResponse) {
+        return rateLimitResponse;
+      }
+
       const auth = options.anyPermissions?.length
         ? await requireAnyPermission(options.anyPermissions)
         : options.permission
