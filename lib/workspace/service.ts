@@ -10,10 +10,20 @@ import {
 } from "@/db/models";
 import { getEntitlementForOrganization } from "@/lib/billing/service";
 import { requirePermission } from "@/lib/auth/authorization";
+import { createRedisKey, getRedisJson, setRedisJson } from "@/lib/cache/redis";
 import type { WorkspaceOverview } from "./types";
+
+const WORKSPACE_OVERVIEW_TTL_SECONDS = 10;
 
 export async function getWorkspaceOverview(): Promise<WorkspaceOverview> {
   const auth = await requirePermission("DASHBOARD_VIEW");
+  const cacheKey = createRedisKey("workspace", "overview", auth.organization.id);
+  const cached = await getRedisJson<WorkspaceOverview>(cacheKey);
+
+  if (cached) {
+    return cached;
+  }
+
   const periodKey = new Date().toISOString().slice(0, 7);
 
   const [documents, knowledgeBases, members, storageBytes, aiQueryCounter, entitlement] =
@@ -48,7 +58,7 @@ export async function getWorkspaceOverview(): Promise<WorkspaceOverview> {
   const aiCreditsLimit =
     configuredLimit == null ? null : Math.max(0, Number(configuredLimit));
 
-  return {
+  const overview: WorkspaceOverview = {
     documents: Number(documents),
     knowledgeBases: Number(knowledgeBases),
     members: Number(members),
@@ -62,4 +72,7 @@ export async function getWorkspaceOverview(): Promise<WorkspaceOverview> {
         ? null
         : Math.max(0, aiCreditsLimit - aiCreditsUsed),
   };
+
+  await setRedisJson(cacheKey, overview, WORKSPACE_OVERVIEW_TTL_SECONDS);
+  return overview;
 }
