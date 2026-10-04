@@ -9,19 +9,13 @@ function getRedisConfig() {
   const url = process.env.UPSTASH_REDIS_REST_URL?.trim();
   const token = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
 
-  if (!url || !token) {
-    return null;
-  }
-
+  if (!url || !token) return null;
   return { url: url.replace(/\/$/, ""), token };
 }
 
 async function command<T>(parts: Array<string | number>) {
   const config = getRedisConfig();
-
-  if (!config) {
-    return null;
-  }
+  if (!config) return null;
 
   try {
     const response = await fetch(config.url, {
@@ -40,7 +34,6 @@ async function command<T>(parts: Array<string | number>) {
     }
 
     const payload = (await response.json()) as RedisResponse<T>;
-
     if (payload.error) {
       console.error(`Redis command failed: ${payload.error}`);
       return null;
@@ -59,10 +52,7 @@ export function createRedisKey(...parts: string[]) {
 
 export async function getRedisJson<T>(key: string) {
   const value = await command<string | null>(["GET", key]);
-
-  if (!value) {
-    return null;
-  }
+  if (!value) return null;
 
   try {
     return JSON.parse(value) as T;
@@ -72,11 +62,7 @@ export async function getRedisJson<T>(key: string) {
   }
 }
 
-export async function setRedisJson(
-  key: string,
-  value: unknown,
-  ttlSeconds: number,
-) {
+export async function setRedisJson(key: string, value: unknown, ttlSeconds: number) {
   await command(["SET", key, JSON.stringify(value), "EX", ttlSeconds]);
 }
 
@@ -84,16 +70,21 @@ export async function deleteRedisKey(key: string) {
   await command(["DEL", key]);
 }
 
+export async function invalidateRedisKeys(...keys: string[]) {
+  const uniqueKeys = [...new Set(keys)];
+  await Promise.all(uniqueKeys.map(deleteRedisKey));
+}
+
 export async function incrementRedisCounter(key: string, ttlSeconds: number) {
   const count = await command<number>(["INCR", key]);
-
-  if (count === null) {
-    return null;
-  }
-
-  if (count === 1) {
-    await command(["EXPIRE", key, ttlSeconds]);
-  }
-
+  if (count === null) return null;
+  if (count === 1) await command(["EXPIRE", key, ttlSeconds]);
   return count;
 }
+
+export const redisKeys = {
+  authSnapshot: (userId: string) => createRedisKey("auth", "snapshot", userId),
+  billingPlans: () => createRedisKey("billing", "plans"),
+  workspaceOverview: (organizationId: string) => createRedisKey("workspace", "overview", organizationId),
+  rateLimit: (prefix: string, identifier: string) => createRedisKey("rate-limit", prefix, identifier),
+};
