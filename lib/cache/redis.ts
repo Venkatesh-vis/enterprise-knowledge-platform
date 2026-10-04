@@ -1,45 +1,47 @@
 import "server-only";
 
+import axios, { type AxiosInstance } from "axios";
+
 type RedisResponse<T> = {
   result?: T;
   error?: string;
 };
 
-function getRedisConfig() {
+let redisClient: AxiosInstance | null = null;
+
+function getRedisClient() {
+  if (redisClient) return redisClient;
+
   const url = process.env.UPSTASH_REDIS_REST_URL?.trim();
   const token = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
 
   if (!url || !token) return null;
-  return { url: url.replace(/\/$/, ""), token };
+
+  redisClient = axios.create({
+    baseURL: url.replace(/\/$/, ""),
+    timeout: 5000,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  return redisClient;
 }
 
 async function command<T>(parts: Array<string | number>) {
-  const config = getRedisConfig();
-  if (!config) return null;
+  const client = getRedisClient();
+  if (!client) return null;
 
   try {
-    const response = await fetch(config.url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${config.token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(parts),
-      cache: "no-store",
-    });
+    const { data } = await client.post<RedisResponse<T>>("", parts);
 
-    if (!response.ok) {
-      console.error(`Redis command failed with status ${response.status}.`);
+    if (data.error) {
+      console.error(`Redis command failed: ${data.error}`);
       return null;
     }
 
-    const payload = (await response.json()) as RedisResponse<T>;
-    if (payload.error) {
-      console.error(`Redis command failed: ${payload.error}`);
-      return null;
-    }
-
-    return payload.result ?? null;
+    return data.result ?? null;
   } catch (error) {
     console.error("Redis request failed:", error);
     return null;
@@ -62,7 +64,11 @@ export async function getRedisJson<T>(key: string) {
   }
 }
 
-export async function setRedisJson(key: string, value: unknown, ttlSeconds: number) {
+export async function setRedisJson(
+  key: string,
+  value: unknown,
+  ttlSeconds: number,
+) {
   await command(["SET", key, JSON.stringify(value), "EX", ttlSeconds]);
 }
 
@@ -85,6 +91,8 @@ export async function incrementRedisCounter(key: string, ttlSeconds: number) {
 export const redisKeys = {
   authSnapshot: (userId: string) => createRedisKey("auth", "snapshot", userId),
   billingPlans: () => createRedisKey("billing", "plans"),
-  workspaceOverview: (organizationId: string) => createRedisKey("workspace", "overview", organizationId),
-  rateLimit: (prefix: string, identifier: string) => createRedisKey("rate-limit", prefix, identifier),
+  workspaceOverview: (organizationId: string) =>
+    createRedisKey("workspace", "overview", organizationId),
+  rateLimit: (prefix: string, identifier: string) =>
+    createRedisKey("rate-limit", prefix, identifier),
 };
