@@ -9,207 +9,130 @@ import Role from "@/db/models/role";
 import RolePermission from "@/db/models/role-permission";
 import Permission from "@/db/models/permission";
 
-import {
-  AUTH_COOKIE_NAME,
-} from "@/lib/auth/cookie";
+import { getRedisJson, createRedisKey, setRedisJson } from "@/lib/cache/redis";
+import { AUTH_COOKIE_NAME } from "@/lib/auth/cookie";
+import { verifyAccessToken } from "@/lib/auth/jwt";
 
-import {
-  verifyAccessToken,
-} from "@/lib/auth/jwt";
+import type { AuthSnapshot } from "@/app/shared/lib/auth/types";
+import type { Permission as PermissionKey, Role as RoleKey } from "@/app/shared/lib/permissions";
 
-import type {
-  AuthSnapshot,
-} from "@/app/shared/lib/auth/types";
-
-import type {
-  Permission as PermissionKey,
-  Role as RoleKey,
-} from "@/app/shared/lib/permissions";
+const AUTH_SNAPSHOT_TTL_SECONDS = 15;
 
 export async function getCurrentUserId() {
-  const cookieStore =
-    await cookies();
-
-  const token =
-    cookieStore.get(
-      AUTH_COOKIE_NAME,
-    )?.value;
+  const cookieStore = await cookies();
+  const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
 
   if (!token) {
     return null;
   }
 
   try {
-    const payload =
-      await verifyAccessToken(
-        token,
-      );
-
+    const payload = await verifyAccessToken(token);
     return payload.sub;
   } catch {
     return null;
   }
 }
 
-export async function getCurrentUser(): Promise<
-  AuthSnapshot | null
-> {
+export async function getCurrentUser(): Promise<AuthSnapshot | null> {
   const userId = await getCurrentUserId();
 
   if (!userId) {
     return null;
   }
 
+  const cacheKey = createRedisKey("auth", "snapshot", userId);
+  const cached = await getRedisJson<AuthSnapshot>(cacheKey);
+
+  if (cached) {
+    return cached;
+  }
+
   try {
-    const user =
-      await User.findByPk(
-        userId,
-        {
-          attributes: [
-            "id",
-            "name",
-            "email",
-            "image",
-          ],
-          raw: true,
-        },
-      );
+    const user = await User.findByPk(userId, {
+      attributes: ["id", "name", "email", "image"],
+      raw: true,
+    });
 
     if (!user) {
       return null;
     }
 
-    const membership =
-      await OrganizationMembership.findOne(
-        {
-          where: {
-            userId: user.id,
-          },
-
-          attributes: [
-            "id",
-            "organizationId",
-            "roleId",
-          ],
-
-          order: [
-            ["createdAt", "ASC"],
-          ],
-
-          raw: true,
-        },
-      );
+    const membership = await OrganizationMembership.findOne({
+      where: { userId: user.id },
+      attributes: ["id", "organizationId", "roleId"],
+      order: [["createdAt", "ASC"]],
+      raw: true,
+    });
 
     if (!membership) {
       return null;
     }
 
-    const organization =
-      await Organization.findByPk(
-        membership.organizationId,
-        {
-          attributes: [
-            "id",
-            "name",
-            "slug",
-          ],
-
-          raw: true,
-        },
-      );
+    const organization = await Organization.findByPk(membership.organizationId, {
+      attributes: ["id", "name", "slug"],
+      raw: true,
+    });
 
     if (!organization) {
       return null;
     }
 
-    const role =
-      await Role.findByPk(
-        membership.roleId,
-        {
-          attributes: [
-            "id",
-            "key",
-            "name",
-          ],
-
-          raw: true,
-        },
-      );
+    const role = await Role.findByPk(membership.roleId, {
+      attributes: ["id", "key", "name"],
+      raw: true,
+    });
 
     if (!role) {
       return null;
     }
 
-    const rolePermissions =
-      await RolePermission.findAll(
-        {
-          where: {
-            roleId: role.id,
-          },
+    const rolePermissions = await RolePermission.findAll({
+      where: { roleId: role.id },
+      attributes: ["permissionId"],
+      raw: true,
+    });
 
-          attributes: [
-            "permissionId",
-          ],
+    const permissionIds = rolePermissions.map(
+      (item: { permissionId: number }) => item.permissionId,
+    );
 
+    const permissionRows = permissionIds.length
+      ? await Permission.findAll({
+          where: { id: permissionIds },
+          attributes: ["key"],
           raw: true,
-        },
-      );
+        })
+      : [];
 
-    const permissionIds =
-      rolePermissions.map(
-        (item: { permissionId: number }) =>
-          item.permissionId,
-      );
+    const permissions = permissionRows.map(
+      (item: { key: string }) => item.key as PermissionKey,
+    );
 
-    const permissionRows =
-      permissionIds.length
-        ? await Permission.findAll(
-            {
-              where: {
-                id: permissionIds,
-              },
-
-              attributes: [
-                "key",
-              ],
-
-              raw: true,
-            },
-          )
-        : [];
-
-    const permissions = permissionRows.map((item: { key: string }) =>item.key as PermissionKey,);
-
-    return {
+    const snapshot: AuthSnapshot = {
       user: {
         id: user.id,
         name: user.name,
         email: user.email,
-        image:
-          user.image ?? null,
+        image: user.image ?? null,
       },
-
       organization: {
         id: organization.id,
         name: organization.name,
         slug: organization.slug,
       },
-
       membership: {
         id: membership.id,
         roleId: role.id,
-        role:
-          role.key as RoleKey,
+        role: role.key as RoleKey,
       },
-
       permissions,
     };
-  } catch (error) {
-    console.error(
-      "Failed to load current user:",
-      error,
-    );
 
+    await setRedisJson(cacheKey, snapshot, AUTH_SNAPSHOT_TTL_SECONDS);
+    return snapshot;
+  } catch (error) {
+    console.error("Failed to load current user:", error);
     return null;
   }
 }
