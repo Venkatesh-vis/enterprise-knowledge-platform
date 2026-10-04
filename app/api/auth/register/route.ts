@@ -13,6 +13,7 @@ import {
 import sequelize from "@/lib/database";
 import { createAccessToken } from "@/lib/auth/jwt";
 import { setAuthCookie } from "@/lib/auth/cookie";
+import { checkApiRateLimit } from "@/lib/http/api-rate-limit";
 
 export const runtime = "nodejs";
 
@@ -55,6 +56,16 @@ function errorResponse(message: string, status: number) {
 }
 
 export async function POST(request: Request) {
+  const rateLimitResponse = await checkApiRateLimit(request, {
+    limit: 5,
+    windowSeconds: 600,
+    keyPrefix: "auth-register",
+  });
+
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   let transaction;
 
   try {
