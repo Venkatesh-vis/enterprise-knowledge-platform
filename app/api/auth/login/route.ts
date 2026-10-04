@@ -3,130 +3,74 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import User from "@/db/models/user";
 import OrganizationMembership from "@/db/models/organization-membership";
-import {createAccessToken,} from "@/lib/auth/jwt";
+import { createAccessToken } from "@/lib/auth/jwt";
+import { setAuthCookie } from "@/lib/auth/cookie";
+import { checkApiRateLimit } from "@/lib/http/api-rate-limit";
 
-import {
-  setAuthCookie,
-} from "@/lib/auth/cookie";
+export const runtime = "nodejs";
 
-export const runtime =
-  "nodejs";
+const loginSchema = z.object({
+  email: z.string().trim().email(),
+  password: z.string().min(1),
+});
 
-const loginSchema =
-  z.object({
-    email: z
-      .string()
-      .trim()
-      .email(),
-
-    password: z
-      .string()
-      .min(1),
-  });
-
-function errorResponse(
-  message: string,
-  status: number,
-) {
+function errorResponse(message: string, status: number) {
   return NextResponse.json(
-    {
-      success: false,
-      message,
-    },
-    {
-      status,
-      headers: {
-        "Cache-Control":
-          "no-store",
-      },
-    },
+    { success: false, message },
+    { status, headers: { "Cache-Control": "no-store" } },
   );
 }
 
-export async function POST(
-  request: Request,
-) {
+export async function POST(request: Request) {
+  const rateLimitResponse = await checkApiRateLimit(request, {
+    limit: 10,
+    windowSeconds: 60,
+    keyPrefix: "auth-login",
+  });
+
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   let body: unknown;
 
   try {
-    body =
-      await request.json();
+    body = await request.json();
   } catch {
-    return errorResponse(
-      "Invalid request.",
-      400,
-    );
+    return errorResponse("Invalid request.", 400);
   }
 
-  const parsed =
-    loginSchema.safeParse(body);
+  const parsed = loginSchema.safeParse(body);
 
   if (!parsed.success) {
-    return errorResponse(
-      "Email and password are required.",
-      400,
-    );
+    return errorResponse("Email and password are required.", 400);
   }
 
-  const email =
-    parsed.data.email
-      .trim()
-      .toLowerCase();
-
-  const password =
-    parsed.data.password;
+  const email = parsed.data.email.trim().toLowerCase();
+  const password = parsed.data.password;
 
   try {
-    const user =
-      await User.findOne({
-        where: {
-          email,
-        },
+    const user = await User.findOne({
+      where: { email },
+      attributes: ["id", "passwordHash"],
+      raw: true,
+    });
 
-        attributes: [
-          "id",
-          "passwordHash",
-        ],
-
-        raw: true,
-      });
-
-    if (
-      !user ||
-      typeof user.passwordHash !==
-        "string"
-    ) {
-      return errorResponse(
-        "Invalid email or password.",
-        401,
-      );
+    if (!user || typeof user.passwordHash !== "string") {
+      return errorResponse("Invalid email or password.", 401);
     }
 
-    const passwordMatches =
-      await bcrypt.compare(
-        password,
-        user.passwordHash,
-      );
+    const passwordMatches = await bcrypt.compare(password, user.passwordHash);
 
     if (!passwordMatches) {
-      return errorResponse(
-        "Invalid email or password.",
-        401,
-      );
+      return errorResponse("Invalid email or password.", 401);
     }
 
-    const membership =
-      await OrganizationMembership.findOne(
-        {
-          where: {
-            userId: user.id,
-          },
-
-          attributes: ["id"],
-
-          raw: true,
-        },
-      );
+    const membership = await OrganizationMembership.findOne({
+      where: { userId: user.id },
+      attributes: ["id"],
+      raw: true,
+    });
 
     if (!membership) {
       return errorResponse(
@@ -135,38 +79,15 @@ export async function POST(
       );
     }
 
-    const token =
-      await createAccessToken(
-        user.id,
-      );
-
-    await setAuthCookie(
-      token,
-    );
+    const token = await createAccessToken(user.id);
+    await setAuthCookie(token);
 
     return NextResponse.json(
-      {
-        success: true,
-        message:
-          "Login successful.",
-      },
-      {
-        status: 200,
-        headers: {
-          "Cache-Control":
-            "no-store",
-        },
-      },
+      { success: true, message: "Login successful." },
+      { status: 200, headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
-    console.error(
-      "Login error:",
-      error,
-    );
-
-    return errorResponse(
-      "Unable to sign in. Please try again.",
-      500,
-    );
+    console.error("Login error:", error);
+    return errorResponse("Unable to sign in. Please try again.", 500);
   }
 }
