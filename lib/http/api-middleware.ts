@@ -37,7 +37,16 @@ export function withApiMiddleware<Context = unknown>(handler: ApiHandler<Context
       const response = await handler(request, context, auth);
 
       if (request.method !== "GET" && response.ok) {
-        await invalidateRedisKeys(redisKeys.workspaceOverview(auth.organization.id));
+        const keys = [
+          redisKeys.workspaceOverview(auth.organization.id),
+          redisKeys.authSnapshot(auth.user.id),
+        ];
+
+        if (new URL(request.url).pathname.startsWith("/api/billing")) {
+          keys.push(redisKeys.billingPlans());
+        }
+
+        await invalidateRedisKeys(...keys);
       }
 
       return response;
